@@ -157,7 +157,7 @@ mod macos {
             .into_iter()
             .enumerate()
             .map(|(index, display_id)| VideoDevice {
-                // usee the system display id so selection stays stable across runs.
+                // Use the system display id so selection stays stable across runs.
                 id: format!("screen:{}", display_id),
                 label: format!("Display {}", index + 1),
                 kind: VideoDeviceKind::Screen,

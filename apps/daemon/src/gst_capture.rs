@@ -231,7 +231,10 @@ impl GstCapture {
         appsink.set_property("max-buffers", &4u32);
 
         let (d3d11download, videoconvert) = if cfg!(target_os = "windows") && !requires_d3d11 {
-            (Some(make_element("d3d11download")?), Some(make_element("videoconvert")?))
+            (
+                Some(make_element("d3d11download")?),
+                Some(make_element("videoconvert")?),
+            )
         } else if cfg!(target_os = "windows") {
             (None, None)
         } else {
@@ -505,21 +508,21 @@ impl GstCapture {
 
         let probe_id = h264parse_src
             .add_probe(gst::PadProbeType::BUFFER, move |_, info| {
-            if guard.load(Ordering::SeqCst) {
-                return gst::PadProbeReturn::Remove;
-            }
+                if guard.load(Ordering::SeqCst) {
+                    return gst::PadProbeReturn::Remove;
+                }
 
-            if let Some(buffer) = info.buffer() {
-                if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
-                    if let Some(pts) = buffer.dts_or_pts() {
-                        let mut guard = keyframe_ring_buffer.lock().unwrap();
-                        guard.push_keyframe_pts(pts.mseconds());
+                if let Some(buffer) = info.buffer() {
+                    if !buffer.flags().contains(gst::BufferFlags::DELTA_UNIT) {
+                        if let Some(pts) = buffer.dts_or_pts() {
+                            let mut guard = keyframe_ring_buffer.lock().unwrap();
+                            guard.push_keyframe_pts(pts.mseconds());
+                        }
                     }
                 }
-            }
 
-            gst::PadProbeReturn::Ok
-        })
+                gst::PadProbeReturn::Ok
+            })
             .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "failed to attach probe"))?;
 
         let started_at = Instant::now();
@@ -765,7 +768,7 @@ fn make_video_src(device_id: &str) -> io::Result<gst::Element> {
     #[cfg(target_os = "macos")]
     let src = {
         let src = make_element("avfvideosrc")?;
-        // Screen capture with an optional display id if the element supports it.
+        // screen capture with a best-effort display id (different plugin versions uses different keys)
         set_bool_property(&src, "capture-screen", true);
         set_bool_property(&src, "do-timestamp", true);
         if let Some(display_id) = monitor_index_from_id(device_id).map(|id| id.max(0) as u32) {
@@ -801,8 +804,8 @@ fn make_audio_src(loopback: bool, device_id: Option<&str>) -> io::Result<gst::El
     #[cfg(target_os = "macos")]
     let src = {
         let src = make_element("osxaudiosrc")?;
-        // macOS has no system-audio loopback here; reuse the input device.
-        let _ = loopback;
+        // mac has no syste audio loopback here; reuse the input device.
+        let _loopback = loopback;
         set_bool_property(&src, "do-timestamp", true);
         src
     };
