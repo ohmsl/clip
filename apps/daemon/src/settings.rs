@@ -55,13 +55,14 @@ pub fn default_settings(
     video_devices: &[VideoDevice],
     encoders: &[VideoEncoderDescriptor],
 ) -> io::Result<UserSettings> {
-    let default_video = prefer_screen_device(video_devices)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no video devices available"))?;
     let default_encoder = prefer_hardware_encoder(encoders)
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no video encoders available"))?;
+    let default_video_id = prefer_screen_device(video_devices)
+        .map(|device| device.id.clone())
+        .unwrap_or_default();
 
     Ok(UserSettings {
-        video_device_id: default_video.id.clone(),
+        video_device_id: default_video_id,
         system_audio_enabled: true,
         mic_device_id: None,
         video_encoder_id: default_encoder.id.clone(),
@@ -78,11 +79,23 @@ pub fn apply_startup_fallbacks(
 ) -> (UserSettings, Vec<String>) {
     let mut changes = Vec::new();
 
+    #[cfg(target_os = "macos")]
+    if settings.system_audio_enabled {
+        // macOS system audio loopback is not implemented yet.
+        settings.system_audio_enabled = false;
+        changes.push("system audio disabled (unsupported on macos)".to_string());
+    }
+
     if !video_devices
         .iter()
         .any(|d| d.id == settings.video_device_id)
     {
-        if let Some(default_video) = prefer_screen_device(video_devices) {
+        if video_devices.is_empty() {
+            if !settings.video_device_id.is_empty() {
+                settings.video_device_id = String::new();
+                changes.push("video device cleared (none available)".to_string());
+            }
+        } else if let Some(default_video) = prefer_screen_device(video_devices) {
             settings.video_device_id = default_video.id.clone();
             changes.push("video device reset to default".to_string());
         }
@@ -124,7 +137,11 @@ pub fn validate_settings(
     microphones: &[AudioDevice],
     encoders: &[VideoEncoderDescriptor],
 ) -> Result<(), String> {
-    if !video_devices
+    if video_devices.is_empty() {
+        if !settings.video_device_id.is_empty() {
+            return Err("no video devices available".to_string());
+        }
+    } else if !video_devices
         .iter()
         .any(|d| d.id == settings.video_device_id)
     {

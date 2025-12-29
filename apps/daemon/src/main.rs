@@ -64,9 +64,13 @@ async fn main() {
             logger::info("settings", format!("{}", change));
         }
         settings = validated;
-        save_settings(&settings).expect("failed to save settings");
+        if let Err(err) = save_settings(&settings) {
+            logger::warn("settings", format!("failed to save settings: {}", err));
+        }
     } else if loaded_settings.is_none() {
-        save_settings(&settings).expect("failed to save settings");
+        if let Err(err) = save_settings(&settings) {
+            logger::warn("settings", format!("failed to save settings: {}", err));
+        }
     }
 
     let state: SharedState = Arc::new(Mutex::new(DaemonState {
@@ -93,9 +97,13 @@ async fn main() {
     let addr: SocketAddr = SocketAddr::from(([127, 0, 0, 1], 43123));
     logger::info("system", format!("daemon listening on {}", addr));
 
-    let listener: TcpListener = TcpListener::bind(addr)
-        .await
-        .expect("failed to bind TCP listener");
+    let listener: TcpListener = match TcpListener::bind(addr).await {
+        Ok(listener) => listener,
+        Err(err) => {
+            logger::error("system", format!("failed to bind TCP listener: {}", err));
+            return;
+        }
+    };
 
     axum::serve(listener, app)
         .with_graceful_shutdown(async {

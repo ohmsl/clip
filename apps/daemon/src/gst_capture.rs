@@ -53,14 +53,13 @@ impl GstCapture {
         let state = Arc::new(Mutex::new(CaptureState::Starting));
         let stop_flag = Arc::new(AtomicBool::new(false));
 
-        let video_src = make_element("d3d11screencapturesrc")?;
-        set_bool_property(&video_src, "do-timestamp", true);
+        let video_src = make_video_src(&config.video_device_id)?;
 
-        if let Some(monitor) = monitor_index_from_id(&config.video_device_id) {
-            set_i32_property(&video_src, "monitor-index", monitor);
-        }
-
-        let d3d11convert = make_element("d3d11convert")?;
+        let d3d11convert = if cfg!(target_os = "windows") {
+            Some(make_element("d3d11convert")?)
+        } else {
+            None
+        };
 
         let video_capsfilter = make_element("capsfilter")?;
 
@@ -74,6 +73,13 @@ impl GstCapture {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "selected encoder requires D3D12 memory, which is not supported",
+            ));
+        }
+
+        if requires_d3d11 && !cfg!(target_os = "windows") {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "selected encoder requires D3D11 memory, which is only supported on Windows",
             ));
         }
 
@@ -131,12 +137,7 @@ impl GstCapture {
         };
 
         let audio_src = if system_audio_enabled {
-            let src = make_element("wasapisrc")?;
-            set_bool_property(&src, "loopback", true);
-            set_bool_property(&src, "do-timestamp", true);
-            set_bool_property(&src, "provide-clock", true);
-            set_bool_property(&src, "low-latency", false);
-            Some(src)
+            Some(make_audio_src(true, None)?)
         } else {
             None
         };
@@ -174,15 +175,7 @@ impl GstCapture {
         let system_queue = if mix_audio { Some(make_queue()?) } else { None };
 
         let mic_src = if mic_enabled {
-            let mic = make_element("wasapisrc")?;
-            set_bool_property(&mic, "loopback", false);
-            set_bool_property(&mic, "do-timestamp", true);
-            set_bool_property(&mic, "provide-clock", false);
-            set_bool_property(&mic, "low-latency", false);
-            if let Some(mic_id) = mic_device {
-                set_str_property(&mic, "device", mic_id);
-            }
-            Some(mic)
+            Some(make_audio_src(false, mic_device.map(|id| id.as_str()))?)
         } else {
             None
         };
@@ -237,21 +230,26 @@ impl GstCapture {
         appsink.set_property("drop", &true);
         appsink.set_property("max-buffers", &4u32);
 
-        let d3d11download = if requires_d3d11 {
-            None
+        let (d3d11download, videoconvert) = if cfg!(target_os = "windows") && !requires_d3d11 {
+            (Some(make_element("d3d11download")?), Some(make_element("videoconvert")?))
+        } else if cfg!(target_os = "windows") {
+            (None, None)
         } else {
-            Some(make_element("d3d11download")?)
+            (None, Some(make_element("videoconvert")?))
         };
 
-        let videoconvert = if requires_d3d11 {
-            None
-        } else {
-            Some(make_element("videoconvert")?)
-        };
-
-        let mut elements: Vec<&gst::Element> = vec![
-            &video_src,
-            &d3d11convert,
+        // Video chain: src -> optional transforms -> capsfilter -> encoder -> parser -> caps -> queue.
+        let mut elements: Vec<&gst::Element> = vec![&video_src];
+        if let Some(convert) = d3d11convert.as_ref() {
+            elements.push(convert);
+        }
+        if let Some(download) = d3d11download.as_ref() {
+            elements.push(download);
+        }
+        if let Some(convert) = videoconvert.as_ref() {
+            elements.push(convert);
+        }
+        elements.extend_from_slice(&[
             &video_capsfilter,
             &video_encoder,
             &h264parse,
@@ -259,16 +257,7 @@ impl GstCapture {
             &video_queue,
             &mux,
             appsink.upcast_ref(),
-        ];
-
-        if let Some(download) = d3d11download.as_ref() {
-            elements.insert(2, download);
-        }
-
-        if let Some(convert) = videoconvert.as_ref() {
-            let insert_index = if d3d11download.is_some() { 3 } else { 2 };
-            elements.insert(insert_index, convert);
-        }
+        ]);
 
         if let Some(element) = audio_src.as_ref() {
             elements.push(element);
@@ -332,18 +321,20 @@ impl GstCapture {
             })
         }
 
-        link(&video_src, &d3d11convert)?;
-        if let Some(download) = d3d11download.as_ref() {
-            link(&d3d11convert, download)?;
-            if let Some(convert) = videoconvert.as_ref() {
-                link(download, convert)?;
-                link(convert, &video_capsfilter)?;
-            } else {
-                link(download, &video_capsfilter)?;
-            }
-        } else {
-            link(&d3d11convert, &video_capsfilter)?;
+        let mut last = &video_src;
+        if let Some(convert) = d3d11convert.as_ref() {
+            link(last, convert)?;
+            last = convert;
         }
+        if let Some(download) = d3d11download.as_ref() {
+            link(last, download)?;
+            last = download;
+        }
+        if let Some(convert) = videoconvert.as_ref() {
+            link(last, convert)?;
+            last = convert;
+        }
+        link(last, &video_capsfilter)?;
         link(&video_capsfilter, &video_encoder)?;
         link(&video_encoder, &h264parse)?;
         link(&h264parse, &h264_capsfilter)?;
@@ -758,6 +749,78 @@ fn validate_config(config: &UserSettings) -> io::Result<()> {
     }
 
     Ok(())
+}
+
+fn make_video_src(device_id: &str) -> io::Result<gst::Element> {
+    #[cfg(target_os = "windows")]
+    let src = {
+        let src = make_element("d3d11screencapturesrc")?;
+        set_bool_property(&src, "do-timestamp", true);
+        if let Some(monitor) = monitor_index_from_id(device_id) {
+            set_i32_property(&src, "monitor-index", monitor);
+        }
+        src
+    };
+
+    #[cfg(target_os = "macos")]
+    let src = {
+        let src = make_element("avfvideosrc")?;
+        // Screen capture with an optional display id if the element supports it.
+        set_bool_property(&src, "capture-screen", true);
+        set_bool_property(&src, "do-timestamp", true);
+        if let Some(display_id) = monitor_index_from_id(device_id).map(|id| id.max(0) as u32) {
+            set_u32_property(&src, "display-id", display_id);
+            set_u32_property(&src, "screen-index", display_id);
+            set_u32_property(&src, "screen", display_id);
+        }
+        src
+    };
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let src = {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "video capture is not supported on this platform",
+        ));
+    };
+
+    Ok(src)
+}
+
+fn make_audio_src(loopback: bool, device_id: Option<&str>) -> io::Result<gst::Element> {
+    #[cfg(target_os = "windows")]
+    let src = {
+        let src = make_element("wasapisrc")?;
+        set_bool_property(&src, "loopback", loopback);
+        set_bool_property(&src, "do-timestamp", true);
+        set_bool_property(&src, "provide-clock", loopback);
+        set_bool_property(&src, "low-latency", false);
+        src
+    };
+
+    #[cfg(target_os = "macos")]
+    let src = {
+        let src = make_element("osxaudiosrc")?;
+        // macOS has no system-audio loopback here; reuse the input device.
+        let _ = loopback;
+        set_bool_property(&src, "do-timestamp", true);
+        src
+    };
+
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    let src = {
+        return Err(io::Error::new(
+            io::ErrorKind::Other,
+            "audio capture is not supported on this platform",
+        ));
+    };
+
+    if let Some(id) = device_id {
+        set_str_property(&src, "device", id);
+        set_str_property(&src, "device-id", id);
+    }
+
+    Ok(src)
 }
 
 fn set_state(state: &Arc<Mutex<CaptureState>>, new_state: CaptureState) {

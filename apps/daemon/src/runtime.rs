@@ -17,6 +17,11 @@ pub fn restart_capture(state: &mut DaemonState) -> Result<(), io::Error> {
         rb.clear();
     }
 
+    if state.settings.video_device_id.is_empty() {
+        logger::warn("capture", "no video device available; capture disabled");
+        return Ok(());
+    }
+
     // Start capture pipeline
     let capture = GstCapture::start(&state.settings, state.ring_buffer.clone())?;
     state.capture = Some(capture);
