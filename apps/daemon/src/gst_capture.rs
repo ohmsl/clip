@@ -58,9 +58,73 @@ pub struct GstCapture {
 
 impl GstCapture {
     pub fn start(config: &UserSettings, ring_buffer: Arc<Mutex<RingBuffer>>) -> io::Result<Self> {
-        let callback_guard = Arc::new(AtomicBool::new(false));
-
         gst::init().map_err(|err| io::Error::new(io::ErrorKind::Other, err.to_string()))?;
+
+        let mut last_error = None;
+        let mut attempts = Vec::new();
+
+        attempts.push((
+            crate::audio::caps::AudioCapsPolicy::default(),
+            false,
+            false,
+            "default caps",
+        ));
+        attempts.push((
+            crate::audio::caps::AudioCapsPolicy::safe_fallback(),
+            false,
+            false,
+            "fallback caps",
+        ));
+
+        if config.mic_device_id.as_ref().is_some_and(|s| !s.is_empty()) {
+            attempts.push((
+                crate::audio::caps::AudioCapsPolicy::safe_fallback(),
+                false,
+                true,
+                "fallback caps (mic disabled)",
+            ));
+        }
+
+        if config.system_audio_enabled {
+            attempts.push((
+                crate::audio::caps::AudioCapsPolicy::safe_fallback(),
+                true,
+                false,
+                "fallback caps (system disabled)",
+            ));
+        }
+
+        for (policy, disable_system, disable_mic, label) in attempts {
+            let mut attempt_config = config.clone();
+            if disable_system {
+                attempt_config.system_audio_enabled = false;
+            }
+            if disable_mic {
+                attempt_config.mic_device_id = None;
+            }
+
+            logger::info("audio", format!("capture attempt: {}", label));
+
+            match Self::start_with_policy(&attempt_config, ring_buffer.clone(), &policy) {
+                Ok(capture) => return Ok(capture),
+                Err(err) => {
+                    logger::warn("audio", format!("capture attempt failed: {}", err));
+                    last_error = Some(err);
+                }
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| {
+            io::Error::new(io::ErrorKind::Other, "failed to start GStreamer pipeline")
+        }))
+    }
+
+    fn start_with_policy(
+        config: &UserSettings,
+        ring_buffer: Arc<Mutex<RingBuffer>>,
+        caps_policy: &crate::audio::caps::AudioCapsPolicy,
+    ) -> io::Result<Self> {
+        let callback_guard = Arc::new(AtomicBool::new(false));
 
         validate_config(config)?;
 
@@ -76,7 +140,7 @@ impl GstCapture {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to add mux"))?;
 
         let video = VideoGraph::build(&pipeline, config)?;
-        let audio = AudioGraph::build(&pipeline, config)?;
+        let audio = AudioGraph::build(&pipeline, config, caps_policy)?;
 
         link_queue_to_mux(&video.output.element, &mux, "video")?;
 
@@ -85,7 +149,7 @@ impl GstCapture {
             None => (None, None),
         };
 
-        if let Some(audio) = audio {
+        if let Some(audio) = audio.as_ref() {
             if let Some(src_pad) = audio.output.element.static_pad("src") {
                 let caps = src_pad.current_caps();
                 logger::info("audio", format!("audio caps before mux: {:?}", caps));
@@ -116,24 +180,6 @@ impl GstCapture {
         video.attach_keyframe_tracker(ring_buffer.clone())?;
 
         let (packet_tx, packet_rx) = crossbeam_channel::bounded::<Packet>(1024);
-
-        // Worker thread owns the ring buffer
-        let ring_buffer_clone = ring_buffer.clone();
-        let stop_flag_clone = stop_flag.clone();
-
-        let worker_thread = std::thread::spawn(move || {
-            while !stop_flag_clone.load(Ordering::SeqCst) {
-                match packet_rx.recv() {
-                    Ok(packet) => {
-                        if let Ok(mut rb) = ring_buffer_clone.lock() {
-                            rb.push(packet);
-                        }
-                    }
-                    Err(_) => break,
-                }
-            }
-        });
-
         let tx = packet_tx.clone();
 
         appsink.set_callbacks(
@@ -170,6 +216,27 @@ impl GstCapture {
                 "failed to start GStreamer pipeline",
             ));
         }
+
+        if let Some(audio) = audio.as_ref() {
+            audio.log_negotiated_caps();
+        }
+
+        // Worker thread owns the ring buffer
+        let ring_buffer_clone = ring_buffer.clone();
+        let stop_flag_clone = stop_flag.clone();
+
+        let worker_thread = std::thread::spawn(move || {
+            while !stop_flag_clone.load(Ordering::SeqCst) {
+                match packet_rx.recv() {
+                    Ok(packet) => {
+                        if let Ok(mut rb) = ring_buffer_clone.lock() {
+                            rb.push(packet);
+                        }
+                    }
+                    Err(_) => break,
+                }
+            }
+        });
 
         set_state(&state, CaptureState::Running);
 

@@ -60,6 +60,7 @@ impl AudioMixer {
         Ok(AudioSourceOutput {
             element: mixer,
             volume: None,
+            source: None,
         })
     }
 }

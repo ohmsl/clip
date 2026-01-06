@@ -20,6 +20,20 @@ impl AudioEncoder {
         pipeline: &gst::Pipeline,
         input: AudioSourceOutput,
     ) -> io::Result<GraphOutput> {
+        let convert = gst::ElementFactory::make("audioconvert")
+            .build()
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing audioconvert"))?;
+
+        let format_capsfilter = gst::ElementFactory::make("capsfilter")
+            .build()
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing capsfilter"))?;
+
+        let format_caps = gst::Caps::builder("audio/x-raw")
+            .field("format", "S16LE")
+            .field("layout", "interleaved")
+            .build();
+        format_capsfilter.set_property("caps", &format_caps);
+
         let encoder = make_audio_encoder()?;
 
         let parser = gst::ElementFactory::make("aacparse")
@@ -38,12 +52,19 @@ impl AudioEncoder {
         capsfilter.set_property("caps", &caps);
 
         pipeline
-            .add_many(&[&encoder, &parser, &capsfilter])
+            .add_many(&[&convert, &format_capsfilter, &encoder, &parser, &capsfilter])
             .map_err(|_| {
                 io::Error::new(io::ErrorKind::Other, "failed to add elements to pipeline")
             })?;
 
-        gst::Element::link_many(&[&input.element, &encoder, &parser, &capsfilter])
+        gst::Element::link_many(&[
+            &input.element,
+            &convert,
+            &format_capsfilter,
+            &encoder,
+            &parser,
+            &capsfilter,
+        ])
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "failed to link elements"))?;
 
         Ok(GraphOutput {

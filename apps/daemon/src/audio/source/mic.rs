@@ -4,23 +4,16 @@ use gst::prelude::*;
 use gstreamer as gst;
 
 use super::AudioSourceOutput;
+use crate::{audio::caps::AudioCapsChoice, capture_devices::AudioDeviceInfo, logger};
 
 pub struct MicAudioSource {
-    device_id: String,
+    device: AudioDeviceInfo,
+    caps: AudioCapsChoice,
 }
 
 impl MicAudioSource {
-    pub fn from_device(device_id: &str) -> io::Result<Self> {
-        if device_id.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "mic device id is empty",
-            ));
-        }
-
-        Ok(Self {
-            device_id: device_id.to_string(),
-        })
+    pub fn from_device(device: AudioDeviceInfo, caps: AudioCapsChoice) -> io::Result<Self> {
+        Ok(Self { device, caps })
     }
 
     pub fn build(
@@ -28,12 +21,37 @@ impl MicAudioSource {
         pipeline: &gst::Pipeline,
         volume_value: f32,
     ) -> io::Result<AudioSourceOutput> {
-        let src = gst::ElementFactory::make("wasapisrc")
-            .build()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
+        logger::info(
+            "audio",
+            format!("mic device selected: {} ({})", self.device.label, self.device.id),
+        );
+        logger::info("audio", format!("mic device caps: {}", self.device.caps.to_string()));
+        logger::info(
+            "audio",
+            format!(
+                "mic requested caps: rate={}, channels={}",
+                self.caps.rate, self.caps.channels
+            ),
+        );
+
+        let src = match self.device.device.create_element(None) {
+            Ok(src) => src,
+            Err(err) => {
+                logger::warn(
+                    "audio",
+                    format!("mic create_element failed, falling back: {}", err),
+                );
+                let src = gst::ElementFactory::make("wasapisrc")
+                    .build()
+                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
+                if src.find_property("device").is_some() {
+                    src.set_property_from_str("device", &self.device.id);
+                }
+                src
+            }
+        };
 
         src.set_property("do-timestamp", &true);
-        src.set_property_from_str("device", &self.device_id);
 
         let convert = gst::ElementFactory::make("audioconvert")
             .build()
@@ -50,9 +68,8 @@ impl MicAudioSource {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing capsfilter"))?;
 
         let caps = gst::Caps::builder("audio/x-raw")
-            .field("rate", 48_000i32)
-            .field("channels", 2i32)
-            .field("layout", "interleaved")
+            .field("rate", self.caps.rate)
+            .field("channels", self.caps.channels)
             .build();
         capsfilter.set_property("caps", &caps);
 
@@ -78,6 +95,7 @@ impl MicAudioSource {
         Ok(AudioSourceOutput {
             element: queue,
             volume: Some(volume),
+            source: Some(src),
         })
     }
 }

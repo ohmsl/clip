@@ -3,15 +3,18 @@ use std::io;
 use gst::prelude::*;
 use gstreamer as gst;
 
-use crate::settings::UserSettings;
+use crate::{audio::caps::AudioCapsChoice, capture_devices::AudioDeviceInfo, logger};
 
 use super::AudioSourceOutput;
 
-pub struct SystemAudioSource;
+pub struct SystemAudioSource {
+    device: AudioDeviceInfo,
+    caps: AudioCapsChoice,
+}
 
 impl SystemAudioSource {
-    pub fn from_settings(_config: &UserSettings) -> io::Result<Self> {
-        Ok(Self)
+    pub fn from_device(device: AudioDeviceInfo, caps: AudioCapsChoice) -> io::Result<Self> {
+        Ok(Self { device, caps })
     }
 
     pub fn build(
@@ -19,9 +22,54 @@ impl SystemAudioSource {
         pipeline: &gst::Pipeline,
         volume_value: f32,
     ) -> io::Result<AudioSourceOutput> {
-        let src = gst::ElementFactory::make("wasapisrc")
-            .build()
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
+        logger::info(
+            "audio",
+            format!(
+                "system device selected: {} ({})",
+                self.device.label, self.device.id
+            ),
+        );
+        logger::info(
+            "audio",
+            format!("system device caps: {}", self.device.caps.to_string()),
+        );
+        logger::info(
+            "audio",
+            format!(
+                "system requested caps: rate={}, channels={}",
+                self.caps.rate, self.caps.channels
+            ),
+        );
+
+        let mut src = match self.device.device.create_element(None) {
+            Ok(src) => src,
+            Err(err) => {
+                logger::warn(
+                    "audio",
+                    format!("system create_element failed, falling back: {}", err),
+                );
+                let src = gst::ElementFactory::make("wasapisrc")
+                    .build()
+                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
+                if src.find_property("device").is_some() {
+                    src.set_property_from_str("device", &self.device.id);
+                }
+                src
+            }
+        };
+
+        if src.find_property("loopback").is_none() {
+            logger::warn(
+                "audio",
+                "system device element is not a wasapisrc; recreating for loopback",
+            );
+            src = gst::ElementFactory::make("wasapisrc")
+                .build()
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
+            if src.find_property("device").is_some() {
+                src.set_property_from_str("device", &self.device.id);
+            }
+        }
 
         src.set_property("loopback", &true);
         src.set_property("do-timestamp", &true);
@@ -41,9 +89,8 @@ impl SystemAudioSource {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing capsfilter"))?;
 
         let caps = gst::Caps::builder("audio/x-raw")
-            .field("rate", 48_000i32)
-            .field("channels", 2i32)
-            .field("layout", "interleaved")
+            .field("rate", self.caps.rate)
+            .field("channels", self.caps.channels)
             .build();
         capsfilter.set_property("caps", &caps);
 
@@ -70,6 +117,7 @@ impl SystemAudioSource {
         Ok(AudioSourceOutput {
             element: queue,
             volume: Some(volume),
+            source: Some(src),
         })
     }
 }
