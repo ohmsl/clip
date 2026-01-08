@@ -1,31 +1,35 @@
-import { Chip, ChipProps } from "@heroui/react";
-import { useBackendConnectionStore } from "../state/backendConnection";
+﻿import { useMemo } from "react";
+import { CapturePhase } from "../types/CapturePhase";
 
-export const StatusIndicator = () => {
-    const status = useBackendConnectionStore((state) => state.status);
+type StatusIndicatorProps = {
+    phase?: CapturePhase;
+    timerLabel?: string;
+};
 
-    const getColor = (): ChipProps["color"] => {
-        switch (status) {
-            case "connected":
-                return "success";
-            case "connecting":
-                return "warning";
-            case "disconnected":
-                return "danger";
+export const StatusIndicator = ({
+    phase = "unknown",
+    timerLabel = "--:--:--",
+}: StatusIndicatorProps) => {
+    const { label, className } = useMemo(() => {
+        switch (phase) {
+            case "running":
+                return { label: "REC", className: "text-red-500" };
+            case "restarting":
+                return { label: "RST", className: "text-yellow-500" };
+            case "error":
+                return { label: "ERR", className: "text-red-400" };
+            case "stopped":
+            case "unknown":
+            default:
+                return { label: "OFF", className: "text-neutral-500" };
         }
-    };
+    }, [phase]);
 
     return (
-        <Chip
-            size="md"
-            color={getColor()}
-            variant="flat"
-            className="capitalize p-1"
-        >
-            <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-current" />
-                {status}
-            </div>
-        </Chip>
+        <div className="flex items-center gap-3">
+            <span className={className}>{label}</span>
+            <span>REC</span>
+            <span className="text-neutral-400">{timerLabel}</span>
+        </div>
     );
 };

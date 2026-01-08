@@ -16,7 +16,7 @@ type Shade =
 /**
  * A HeroUI semantic colour palette (50-900).
  */
-type SemanticPalette = Record<Shade, string>;
+type SemanticPalette = Record<Shade | "foreground" | "DEFAULT", string>;
 
 /**
  * The semantic colours object HeroUI expects inside a theme entry.
@@ -54,19 +54,23 @@ const defaultPalette: SemanticPalette = {
     "700": "#d4d4d8",
     "800": "#e4e4e7",
     "900": "#f4f4f5",
+    foreground: "#FFFFFF",
+    DEFAULT: "#71717a",
 };
 
 const primaryPalette: SemanticPalette = {
-    "50": "#EAF0F9",
-    "100": "#D7E0F2",
-    "200": "#B6C6E6",
-    "300": "#9BAED9",
-    "400": "#6B87C2",
-    "500": "#3863A8",
-    "600": "#2F5490",
-    "700": "#274577",
-    "800": "#1F365E",
-    "900": "#172845",
+    "50": "#fee2e2",
+    "100": "#fecaca",
+    "200": "#fca5a5",
+    "300": "#f87171",
+    "400": "#ef4444",
+    "500": "#e7000b",
+    "600": "#b91c1c",
+    "700": "#991b1b",
+    "800": "#7f1d1d",
+    "900": "#450a0a",
+    foreground: "#FFFFFF",
+    DEFAULT: "#e7000b",
 };
 
 const secondaryPalette: SemanticPalette = {
@@ -80,6 +84,8 @@ const secondaryPalette: SemanticPalette = {
     "700": "#5887AB",
     "800": "#476E87",
     "900": "#355564",
+    foreground: "#FFFFFF",
+    DEFAULT: "#7CB9F2",
 };
 
 export const lightColors: HeroUiThemeColors = {
@@ -102,7 +108,11 @@ export const lightColors: HeroUiThemeColors = {
 };
 
 export const darkColors: HeroUiThemeColors = {
+    primary: primaryPalette,
+    secondary: secondaryPalette,
+
     // Layout tokens
-    background: "#0e0d10", // Eigengrau
+    background: "#09090b", // Eigengrau
     foreground: "#F7F7F7", // White Smoke
+    focus: primaryPalette["100"],
 };

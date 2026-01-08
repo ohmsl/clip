@@ -1,13 +1,14 @@
 use serde::Serialize;
 use std::io;
 
-use gstreamer as gst;
 use gst::prelude::GstObjectExt;
+use gstreamer as gst;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct VideoEncoderDescriptor {
     pub id: String,
     pub name: String,
+    pub description: String,
     pub is_hardware: bool,
     pub required_memory: Option<String>,
 }
@@ -15,8 +16,10 @@ pub struct VideoEncoderDescriptor {
 pub fn list_video_encoders() -> io::Result<Vec<VideoEncoderDescriptor>> {
     gst::init().map_err(|err| io::Error::new(io::ErrorKind::Other, err.to_string()))?;
 
-    let factories =
-        gst::ElementFactory::factories_with_type(gst::ElementFactoryType::VIDEO_ENCODER, gst::Rank::NONE);
+    let factories = gst::ElementFactory::factories_with_type(
+        gst::ElementFactoryType::VIDEO_ENCODER,
+        gst::Rank::NONE,
+    );
 
     let mut encoders = Vec::new();
 
@@ -37,12 +40,13 @@ pub fn list_video_encoders() -> io::Result<Vec<VideoEncoderDescriptor>> {
         if required_memory.as_deref() == Some("D3D12Memory") {
             continue;
         }
-        let is_hardware =
-            factory.has_type(gst::ElementFactoryType::HARDWARE) || factory.klass().contains("Hardware");
+        let is_hardware = factory.has_type(gst::ElementFactoryType::HARDWARE)
+            || factory.klass().contains("Hardware");
 
         encoders.push(VideoEncoderDescriptor {
             id: factory_name.to_string(),
             name: factory.longname().to_string(),
+            description: factory.description().to_string(),
             is_hardware,
             required_memory,
         });
