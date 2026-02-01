@@ -29,8 +29,8 @@ impl MicAudioSource {
         logger::info(
             "audio",
             format!(
-                "mic requested caps: rate={}, channels={}",
-                self.caps.rate, self.caps.channels
+                "mic target mix caps: rate={}, channels={}, layout={}",
+                self.caps.rate, self.caps.channels, self.caps.layout
             ),
         );
 
@@ -70,6 +70,7 @@ impl MicAudioSource {
         let caps = gst::Caps::builder("audio/x-raw")
             .field("rate", self.caps.rate)
             .field("channels", self.caps.channels)
+            .field("layout", self.caps.layout)
             .build();
         capsfilter.set_property("caps", &caps);
 
@@ -91,6 +92,14 @@ impl MicAudioSource {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "failed to add elements"))?;
         gst::Element::link_many(&[&src, &convert, &resample, &capsfilter, &volume, &queue])
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "failed to link elements"))?;
+
+        logger::info(
+            "audio",
+            format!(
+                "mic audio coerced to mix caps: rate={}, channels={}, layout={}",
+                self.caps.rate, self.caps.channels, self.caps.layout
+            ),
+        );
 
         Ok(AudioSourceOutput {
             element: queue,

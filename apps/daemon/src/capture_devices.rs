@@ -30,11 +30,13 @@ pub struct AudioDeviceInfo {
     pub is_input: bool,
     pub caps: gst::Caps,
     pub device: gst::Device,
+    pub endpoint_id: Option<String>,
 }
 
 #[cfg(target_os = "windows")]
 mod windows {
     use crate::capture_devices::{AudioDevice, AudioDeviceInfo, VideoDevice, VideoDeviceKind};
+    use crate::logger;
     use gst::prelude::*;
     use gstreamer as gst;
     use windows::{
@@ -126,7 +128,7 @@ mod windows {
 
             let id = props
                 .as_ref()
-                .and_then(|props| props.get::<String>("device").ok())
+                .and_then(|props| props.get::<String>("device.id").ok())
                 .or_else(|| {
                     props
                         .as_ref()
@@ -135,7 +137,7 @@ mod windows {
                 .or_else(|| {
                     props
                         .as_ref()
-                        .and_then(|props| props.get::<String>("device.id").ok())
+                        .and_then(|props| props.get::<String>("device").ok())
                 });
 
             let Some(id) = id else {
@@ -169,10 +171,10 @@ mod windows {
 
     fn device_id_from_props(props: &gst::Structure) -> Option<String> {
         props
-            .get::<String>("device")
+            .get::<String>("device.id")
             .ok()
             .or_else(|| props.get::<String>("device-id").ok())
-            .or_else(|| props.get::<String>("device.id").ok())
+            .or_else(|| props.get::<String>("device").ok())
     }
 
     fn is_loopback_device(props: &gst::Structure) -> bool {
@@ -185,13 +187,18 @@ mod windows {
             .any(|key| props.get::<bool>(*key).ok().unwrap_or(false))
     }
 
-    fn build_audio_device_info(device: gst::Device, is_input: bool) -> Option<AudioDeviceInfo> {
+    fn build_audio_device_info(
+        device: gst::Device,
+        is_input: bool,
+        allow_loopback: bool,
+    ) -> Option<AudioDeviceInfo> {
         let props = device.properties()?;
-        if is_loopback_device(&props) {
+        if !allow_loopback && is_loopback_device(&props) {
             return None;
         }
 
         let id = device_id_from_props(&props)?;
+        let endpoint_id = props.get::<String>("device.id").ok();
         let caps = device.caps().unwrap_or_else(gst::Caps::new_any);
         let label = device.display_name().to_string();
 
@@ -201,6 +208,7 @@ mod windows {
             is_input,
             caps,
             device,
+            endpoint_id,
         })
     }
 
@@ -213,7 +221,7 @@ mod windows {
                 continue;
             }
 
-            if let Some(info) = build_audio_device_info(device, true) {
+            if let Some(info) = build_audio_device_info(device, true, false) {
                 if info.id == id {
                     return Some(info);
                 }
@@ -226,32 +234,45 @@ mod windows {
     pub fn find_default_output_device() -> Option<AudioDeviceInfo> {
         let devices = collect_audio_devices().ok()?;
 
+        let mut loopback_fallback: Option<AudioDeviceInfo> = None;
         let mut fallback: Option<AudioDeviceInfo> = None;
 
         for device in devices {
             let device_class = device.device_class();
-            if !device_class.contains("Audio/Sink") || device_class.contains("Audio/Source") {
-                continue;
-            }
-
             let props = match device.properties() {
                 Some(props) => props,
                 None => continue,
             };
+
             if is_loopback_device(&props) {
+                if let Some(info) = build_audio_device_info(device, false, true) {
+                    if is_default_device(&props) {
+                        return Some(info);
+                    }
+                    if loopback_fallback.is_none() {
+                        loopback_fallback = Some(info);
+                    }
+                }
                 continue;
             }
 
-            if let Some(info) = build_audio_device_info(device, false) {
-                if is_default_device(&props) {
-                    return Some(info);
-                }
-
-                if fallback.is_none() {
-                    fallback = Some(info);
+            if device_class.contains("Audio/Sink") && !device_class.contains("Audio/Source") {
+                if let Some(info) = build_audio_device_info(device, false, false) {
+                    if is_default_device(&props) {
+                        fallback = Some(info.clone());
+                    }
+                    if fallback.is_none() {
+                        fallback = Some(info);
+                    }
                 }
             }
         }
+
+        if loopback_fallback.is_some() {
+            return loopback_fallback;
+        }
+
+        logger::warn("audio", "no WASAPI loopback device found; falling back to render sink");
 
         fallback
     }

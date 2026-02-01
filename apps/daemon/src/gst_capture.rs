@@ -60,69 +60,13 @@ impl GstCapture {
     pub fn start(config: &UserSettings, ring_buffer: Arc<Mutex<RingBuffer>>) -> io::Result<Self> {
         gst::init().map_err(|err| io::Error::new(io::ErrorKind::Other, err.to_string()))?;
 
-        let mut last_error = None;
-        let mut attempts = Vec::new();
-
-        attempts.push((
-            crate::audio::caps::AudioCapsPolicy::default(),
-            false,
-            false,
-            "default caps",
-        ));
-        attempts.push((
-            crate::audio::caps::AudioCapsPolicy::safe_fallback(),
-            false,
-            false,
-            "fallback caps",
-        ));
-
-        if config.mic_device_id.as_ref().is_some_and(|s| !s.is_empty()) {
-            attempts.push((
-                crate::audio::caps::AudioCapsPolicy::safe_fallback(),
-                false,
-                true,
-                "fallback caps (mic disabled)",
-            ));
-        }
-
-        if config.system_audio_enabled {
-            attempts.push((
-                crate::audio::caps::AudioCapsPolicy::safe_fallback(),
-                true,
-                false,
-                "fallback caps (system disabled)",
-            ));
-        }
-
-        for (policy, disable_system, disable_mic, label) in attempts {
-            let mut attempt_config = config.clone();
-            if disable_system {
-                attempt_config.system_audio_enabled = false;
-            }
-            if disable_mic {
-                attempt_config.mic_device_id = None;
-            }
-
-            logger::info("audio", format!("capture attempt: {}", label));
-
-            match Self::start_with_policy(&attempt_config, ring_buffer.clone(), &policy) {
-                Ok(capture) => return Ok(capture),
-                Err(err) => {
-                    logger::warn("audio", format!("capture attempt failed: {}", err));
-                    last_error = Some(err);
-                }
-            }
-        }
-
-        Err(last_error.unwrap_or_else(|| {
-            io::Error::new(io::ErrorKind::Other, "failed to start GStreamer pipeline")
-        }))
+        logger::info("audio", "capture attempt: configured sources");
+        Self::start_with_config(config, ring_buffer)
     }
 
-    fn start_with_policy(
+    fn start_with_config(
         config: &UserSettings,
         ring_buffer: Arc<Mutex<RingBuffer>>,
-        caps_policy: &crate::audio::caps::AudioCapsPolicy,
     ) -> io::Result<Self> {
         let callback_guard = Arc::new(AtomicBool::new(false));
 
@@ -140,7 +84,7 @@ impl GstCapture {
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "Failed to add mux"))?;
 
         let video = VideoGraph::build(&pipeline, config)?;
-        let audio = AudioGraph::build(&pipeline, config, caps_policy)?;
+        let audio = AudioGraph::build(&pipeline, config)?;
 
         link_queue_to_mux(&video.output.element, &mux, "video")?;
 
@@ -206,14 +150,21 @@ impl GstCapture {
         );
 
         let state_change = pipeline.set_state(gst::State::Playing);
-        if state_change.is_err() {
+        if let Err(err) = state_change {
+            if let Some(message) = collect_startup_error(&pipeline) {
+                logger::error("gst", message.clone());
+                set_pipeline_to_null_and_wait(&pipeline);
+                set_state(&state, CaptureState::Failed(message.clone()));
+                return Err(io::Error::new(io::ErrorKind::Other, message));
+            }
+            set_pipeline_to_null_and_wait(&pipeline);
             set_state(
                 &state,
                 CaptureState::Failed("failed to start GStreamer pipeline".to_string()),
             );
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                "failed to start GStreamer pipeline",
+                format!("failed to start GStreamer pipeline: {err:?}"),
             ));
         }
 
@@ -321,7 +272,7 @@ impl GstCapture {
 
         // 4) Flush pipeline
         let _ = self.pipeline.send_event(gst::event::Eos::new());
-        let _ = self.pipeline.set_state(gst::State::Null);
+        set_pipeline_to_null_and_wait(&self.pipeline);
 
         // 5) Join worker thread
         if let Some(handle) = self.worker_thread.take() {
@@ -384,6 +335,44 @@ fn set_state(state: &Arc<Mutex<CaptureState>>, new_state: CaptureState) {
     let mut guard = state.lock().unwrap();
     logger::info("capture", format!("state: {:?} -> {:?}", *guard, new_state));
     *guard = new_state;
+}
+
+fn collect_startup_error(pipeline: &gst::Pipeline) -> Option<String> {
+    let bus = pipeline.bus()?;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+
+    while std::time::Instant::now() < deadline {
+        let message = bus.timed_pop_filtered(
+            gst::ClockTime::from_mseconds(200),
+            &[gst::MessageType::Error],
+        );
+        let Some(message) = message else { continue };
+
+        if let gst::MessageView::Error(err) = message.view() {
+            let src = err
+                .src()
+                .map(|s| s.path_string())
+                .unwrap_or_else(|| "unknown".to_string().into());
+            let debug = err.debug().unwrap_or_default();
+            return Some(format!(
+                "startup error from {}: {} {}",
+                src,
+                err.error(),
+                if debug.is_empty() {
+                    "".to_string()
+                } else {
+                    format!("(debug: {})", debug)
+                }
+            ));
+        }
+    }
+
+    None
+}
+
+fn set_pipeline_to_null_and_wait(pipeline: &gst::Pipeline) {
+    let _ = pipeline.set_state(gst::State::Null);
+    let _ = pipeline.state(gst::ClockTime::from_seconds(2));
 }
 
 fn spawn_bus_thread(

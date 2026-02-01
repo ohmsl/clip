@@ -3,9 +3,8 @@ use std::io;
 use gstreamer as gst;
 
 use crate::{
-    audio::caps::{choose_caps_common, choose_caps_single, AudioCapsPolicy},
+    audio::caps::mix_format_choice,
     capture_devices::{find_default_output_device, find_microphone_device},
-    logger,
     settings::UserSettings,
 };
 
@@ -34,12 +33,9 @@ pub struct AudioSourceOutput {
 // Audio sources should do the following:
 // - Capture
 // - Convert format
-// - Normalize to device-supported rate/channel caps for mixer compatibility
+// - Coerce to the target mix format for mixer compatibility
 impl AudioSource {
-    pub fn from_settings(
-        config: &UserSettings,
-        caps_policy: &AudioCapsPolicy,
-    ) -> io::Result<Vec<Self>> {
+    pub fn from_settings(config: &UserSettings) -> io::Result<Vec<Self>> {
         let mut sources = Vec::new();
 
         let system_device = if config.system_audio_enabled {
@@ -61,48 +57,19 @@ impl AudioSource {
             None
         };
 
-        let chosen_caps = match (&system_device, &mic_device) {
-            (Some(system), Some(mic)) => choose_caps_common(&system.caps, &mic.caps, caps_policy)
-                .ok_or_else(|| {
-                    logger::error(
-                        "audio",
-                        format!(
-                            "no common caps. system caps: {}, mic caps: {}",
-                            system.caps.to_string(),
-                            mic.caps.to_string()
-                        ),
-                    );
-                    io::Error::new(
-                        io::ErrorKind::Other,
-                        "no common audio caps between system and mic devices",
-                    )
-                })?,
-            (Some(system), None) => choose_caps_single(&system.caps, caps_policy).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "no compatible audio caps for system device",
-                )
-            })?,
-            (None, Some(mic)) => choose_caps_single(&mic.caps, caps_policy).ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    "no compatible audio caps for microphone device",
-                )
-            })?,
-            (None, None) => return Ok(sources),
-        };
+        let target_caps = mix_format_choice();
 
         if let Some(system_device) = system_device {
             sources.push(AudioSource::System(SystemAudioSource::from_device(
                 system_device,
-                chosen_caps,
+                target_caps,
             )?));
         }
 
         if let Some(mic_device) = mic_device {
             sources.push(AudioSource::Mic(MicAudioSource::from_device(
                 mic_device,
-                chosen_caps,
+                target_caps,
             )?));
         }
 

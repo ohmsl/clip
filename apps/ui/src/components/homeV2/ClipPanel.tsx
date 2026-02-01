@@ -5,7 +5,7 @@
     DropdownMenu,
     DropdownTrigger,
 } from "@heroui/react";
-import { CogIcon } from "lucide-react";
+import { CogIcon, LogsIcon } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useBackendConnectionStore } from "../../state/backendConnection";
 import { useCaptureStore } from "../../state/captureRuntime";
@@ -68,6 +68,13 @@ export const ClipPanel = () => {
                     </DropdownTrigger>
 
                     <DropdownMenu>
+                        <DropdownItem
+                            key="log"
+                            startContent={<LogsIcon className="w-5 h-5 mr-2" />}
+                            onPress={() => navigate("log")}
+                        >
+                            Log
+                        </DropdownItem>
                         <DropdownItem
                             key="settings"
                             startContent={<CogIcon className="w-5 h-5 mr-2" />}

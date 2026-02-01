@@ -1,6 +1,7 @@
 import { ToastProvider } from "@heroui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router";
+import { LogView } from "./components/LogView";
 import { SettingsView } from "./components/SettingsView";
 import "./globals.css";
 import { useBackendConnection } from "./hooks/useBackendConnection";
@@ -17,6 +18,7 @@ function App() {
                 <BrowserRouter>
                     <Routes>
                         <Route path="/" element={<Home />} />
+                        <Route path="/log" element={<LogView />} />
                         <Route path="/settings" element={<SettingsView />} />
                     </Routes>
                 </BrowserRouter>

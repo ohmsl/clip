@@ -13,7 +13,7 @@ export const StatusIndicator = ({
     const { label, className } = useMemo(() => {
         switch (phase) {
             case "running":
-                return { label: "REC", className: "text-red-500" };
+                return { label: "REC", className: "text-foreground" };
             case "restarting":
                 return { label: "RST", className: "text-yellow-500" };
             case "error":
@@ -27,8 +27,10 @@ export const StatusIndicator = ({
 
     return (
         <div className="flex items-center gap-3">
+            {phase === "running" && (
+                <span className="text-red-600 animate-pulse">●</span>
+            )}
             <span className={className}>{label}</span>
-            <span>REC</span>
             <span className="text-neutral-400">{timerLabel}</span>
         </div>
     );

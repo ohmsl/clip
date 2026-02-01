@@ -22,11 +22,17 @@ impl SystemAudioSource {
         pipeline: &gst::Pipeline,
         volume_value: f32,
     ) -> io::Result<AudioSourceOutput> {
+        let endpoint_note = self
+            .device
+            .endpoint_id
+            .as_ref()
+            .map(|id| format!(" endpoint={}", id))
+            .unwrap_or_default();
         logger::info(
             "audio",
             format!(
-                "system device selected: {} ({})",
-                self.device.label, self.device.id
+                "system device selected: {} ({}){}",
+                self.device.label, self.device.id, endpoint_note
             ),
         );
         logger::info(
@@ -36,8 +42,8 @@ impl SystemAudioSource {
         logger::info(
             "audio",
             format!(
-                "system requested caps: rate={}, channels={}",
-                self.caps.rate, self.caps.channels
+                "system target mix caps: rate={}, channels={}, layout={}",
+                self.caps.rate, self.caps.channels, self.caps.layout
             ),
         );
 
@@ -51,8 +57,10 @@ impl SystemAudioSource {
                 let src = gst::ElementFactory::make("wasapisrc")
                     .build()
                     .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
-                if src.find_property("device").is_some() {
-                    src.set_property_from_str("device", &self.device.id);
+                if let Some(endpoint_id) = self.device.endpoint_id.as_ref() {
+                    if src.find_property("device").is_some() {
+                        src.set_property_from_str("device", endpoint_id);
+                    }
                 }
                 src
             }
@@ -66,8 +74,10 @@ impl SystemAudioSource {
             src = gst::ElementFactory::make("wasapisrc")
                 .build()
                 .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
-            if src.find_property("device").is_some() {
-                src.set_property_from_str("device", &self.device.id);
+            if let Some(endpoint_id) = self.device.endpoint_id.as_ref() {
+                if src.find_property("device").is_some() {
+                    src.set_property_from_str("device", endpoint_id);
+                }
             }
         }
 
@@ -91,6 +101,7 @@ impl SystemAudioSource {
         let caps = gst::Caps::builder("audio/x-raw")
             .field("rate", self.caps.rate)
             .field("channels", self.caps.channels)
+            .field("layout", self.caps.layout)
             .build();
         capsfilter.set_property("caps", &caps);
 
@@ -113,6 +124,14 @@ impl SystemAudioSource {
 
         gst::Element::link_many(&[&src, &convert, &resample, &capsfilter, &volume, &queue])
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "failed to link elements"))?;
+
+        logger::info(
+            "audio",
+            format!(
+                "system audio coerced to mix caps: rate={}, channels={}, layout={}",
+                self.caps.rate, self.caps.channels, self.caps.layout
+            ),
+        );
 
         Ok(AudioSourceOutput {
             element: queue,

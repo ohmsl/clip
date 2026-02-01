@@ -4,9 +4,7 @@ use gstreamer as gst;
 use gst::prelude::*;
 
 use crate::{
-    audio::{
-        caps::AudioCapsPolicy, encoder::AudioEncoder, mixer::AudioMixer, source::AudioSource,
-    },
+    audio::{encoder::AudioEncoder, mixer::AudioMixer, source::AudioSource},
     settings::UserSettings,
 };
 
@@ -29,9 +27,8 @@ impl AudioGraph {
     pub fn build(
         pipeline: &gst::Pipeline,
         config: &UserSettings,
-        caps_policy: &AudioCapsPolicy,
     ) -> io::Result<Option<Self>> {
-        let sources = AudioSource::from_settings(config, caps_policy)?;
+        let sources = AudioSource::from_settings(config)?;
 
         if sources.is_empty() {
             return Ok(None);
