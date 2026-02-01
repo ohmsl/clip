@@ -61,6 +61,8 @@ impl AudioMixer {
             element: mixer,
             volume: None,
             source: None,
+            capsfilter: None,
+            source_id: None,
         })
     }
 }

@@ -1,8 +1,8 @@
 use std::{
     io,
     sync::{
-        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
     },
 };
 
@@ -54,6 +54,20 @@ pub struct GstCapture {
     // audio controls
     system_volume: Option<gst::Element>,
     mic_volume: Option<gst::Element>,
+    audio_caps: Vec<(AudioSourceId, gst::Element)>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct AudioCapsSummary {
+    pub rate: Option<i32>,
+    pub channels: Option<i32>,
+    pub raw: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct AudioCapsState {
+    pub system: Option<AudioCapsSummary>,
+    pub mic: Option<AudioCapsSummary>,
 }
 
 impl GstCapture {
@@ -91,6 +105,11 @@ impl GstCapture {
         let (system_volume, mic_volume) = match audio.as_ref() {
             Some(graph) => (graph.volumes.system.clone(), graph.volumes.mic.clone()),
             None => (None, None),
+        };
+
+        let audio_caps = match audio.as_ref() {
+            Some(graph) => graph.capsfilters.clone(),
+            None => Vec::new(),
         };
 
         if let Some(audio) = audio.as_ref() {
@@ -213,11 +232,25 @@ impl GstCapture {
 
             system_volume,
             mic_volume,
+            audio_caps,
         })
     }
 
     pub fn is_running(&self) -> bool {
         matches!(*self.state.lock().unwrap(), CaptureState::Running)
+    }
+
+    pub fn audio_caps(&self) -> AudioCapsState {
+        let mut state = AudioCapsState::default();
+        for (source_id, capsfilter) in &self.audio_caps {
+            let caps = capsfilter.property::<gst::Caps>("caps");
+            let summary = caps_to_summary(&caps);
+            match source_id {
+                AudioSourceId::System => state.system = Some(summary),
+                AudioSourceId::Mic => state.mic = Some(summary),
+            }
+        }
+        state
     }
 
     pub fn state(&self) -> CaptureState {
@@ -291,6 +324,20 @@ impl GstCapture {
 impl Drop for GstCapture {
     fn drop(&mut self) {
         self.stop_inner();
+    }
+}
+
+fn caps_to_summary(caps: &gst::Caps) -> AudioCapsSummary {
+    let mut rate = None;
+    let mut channels = None;
+    if let Some(structure) = caps.structure(0) {
+        rate = structure.get::<i32>("rate").ok();
+        channels = structure.get::<i32>("channels").ok();
+    }
+    AudioCapsSummary {
+        rate,
+        channels,
+        raw: Some(caps.to_string()),
     }
 }
 

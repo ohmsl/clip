@@ -1,102 +1,13 @@
 ﻿import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useRef } from "react";
-import { AudioCaps } from "../types/AudioCaps";
 import { LogEvent } from "../types/LogEvent";
-import { UserSettings } from "../types/UserSettings";
 import { useBackendConnectionStore } from "../state/backendConnection";
-import {
-    useCaptureStore,
-    StatusResponse,
-    AudioCapsState,
-} from "../state/captureRuntime";
+import { useCaptureStore, StatusResponse } from "../state/captureRuntime";
 
 type CaptureStatusEvent = {
     status: string;
     message?: string | null;
-};
-
-const parseCapsLog = (message: string) => {
-    const match = message.match(/source\s+(\d+)\s+negotiated caps:\s+(.*)$/);
-    if (!match) {
-        return null;
-    }
-    const index = Number(match[1]);
-    if (Number.isNaN(index)) {
-        return null;
-    }
-
-    let raw = match[2].trim();
-    if (raw.startsWith("Some(")) {
-        raw = raw.replace(/^Some\(\"?/, "").replace(/\"\)?$/, "");
-    }
-
-    if (raw === "None") {
-        return { index, caps: null as AudioCaps | null };
-    }
-
-    const rateMatch = raw.match(/rate=\(int\)(\d+)/);
-    const channelsMatch = raw.match(/channels=\(int\)(\d+)/);
-
-    const caps: AudioCaps = {
-        rate: rateMatch ? Number(rateMatch[1]) : undefined,
-        channels: channelsMatch ? Number(channelsMatch[1]) : undefined,
-        raw,
-    };
-
-    return { index, caps };
-};
-
-const parseCoercedCapsLog = (message: string) => {
-    const match = message.match(
-        /^(system|mic) audio coerced to mix caps: rate=(\d+), channels=(\d+)/,
-    );
-    if (!match) {
-        return null;
-    }
-    const source = match[1] === "system" ? "system" : "mic";
-    const rate = Number(match[2]);
-    const channels = Number(match[3]);
-    if (Number.isNaN(rate) || Number.isNaN(channels)) {
-        return null;
-    }
-    const caps: AudioCaps = {
-        rate,
-        channels,
-        raw: message,
-    };
-    return { source, caps };
-};
-
-const mapAudioIndexToSource = (index: number, settings: UserSettings) => {
-    const systemEnabled = settings.system_audio_enabled;
-    const micEnabled = !!settings.mic_device_id;
-
-    if (systemEnabled && micEnabled) {
-        return index === 0 ? "system" : index === 1 ? "mic" : null;
-    }
-    if (systemEnabled && !micEnabled) {
-        return index === 0 ? "system" : null;
-    }
-    if (!systemEnabled && micEnabled) {
-        return index === 0 ? "mic" : null;
-    }
-    return null;
-};
-
-const applyAudioCapsUpdate = (
-    settings: UserSettings | null,
-    parsed: { index: number; caps: AudioCaps | null },
-    update: (caps: AudioCapsState) => void,
-) => {
-    if (!settings) {
-        return;
-    }
-    const source = mapAudioIndexToSource(parsed.index, settings);
-    if (!source) {
-        return;
-    }
-    update({ [source]: parsed.caps ?? undefined });
 };
 
 export const useCaptureController = () => {
@@ -126,6 +37,7 @@ export const useCaptureController = () => {
         try {
             const nextStatus = await invoke<StatusResponse>("get_status");
             setStatus(nextStatus);
+            setAudioCaps(nextStatus.audio_caps ?? {});
             const state = useCaptureStore.getState();
             if (state.capturePhase === "unknown" || state.capturePhase === "stopped") {
                 if (nextStatus.buffering) {
@@ -270,30 +182,6 @@ export const useCaptureController = () => {
                 setLastAttemptLabel(label);
             }
 
-            if (log.source === "audio" && log.message.includes("negotiated caps")) {
-                const parsed = parseCapsLog(log.message);
-                if (!parsed) {
-                    return;
-                }
-                const settings = useCaptureStore.getState().status?.settings ?? null;
-                applyAudioCapsUpdate(settings, parsed, (update) =>
-                    setAudioCaps({
-                        ...useCaptureStore.getState().audioCaps,
-                        ...update,
-                    }),
-                );
-            }
-
-            if (log.source === "audio" && log.message.includes("audio coerced to mix caps")) {
-                const parsed = parseCoercedCapsLog(log.message);
-                if (!parsed) {
-                    return;
-                }
-                setAudioCaps({
-                    ...useCaptureStore.getState().audioCaps,
-                    [parsed.source]: parsed.caps,
-                });
-            }
         };
 
         invoke<Array<LogEvent>>("get_recent_logs")

@@ -28,6 +28,8 @@ pub struct AudioSourceOutput {
     pub element: gst::Element,
     pub volume: Option<gst::Element>,
     pub source: Option<gst::Element>,
+    pub capsfilter: Option<gst::Element>,
+    pub source_id: Option<AudioSourceId>,
 }
 
 // Audio sources should do the following:

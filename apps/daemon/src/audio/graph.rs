@@ -1,10 +1,10 @@
 use std::io;
 
-use gstreamer as gst;
 use gst::prelude::*;
+use gstreamer as gst;
 
 use crate::{
-    audio::{encoder::AudioEncoder, mixer::AudioMixer, source::AudioSource},
+    audio::{encoder::AudioEncoder, mixer::AudioMixer, source::AudioSource, AudioSourceId},
     settings::UserSettings,
 };
 
@@ -21,13 +21,11 @@ pub struct AudioGraph {
     pub output: GraphOutput,
     pub volumes: AudioVolumes,
     pub sources: Vec<gst::Element>,
+    pub capsfilters: Vec<(AudioSourceId, gst::Element)>,
 }
 
 impl AudioGraph {
-    pub fn build(
-        pipeline: &gst::Pipeline,
-        config: &UserSettings,
-    ) -> io::Result<Option<Self>> {
+    pub fn build(pipeline: &gst::Pipeline, config: &UserSettings) -> io::Result<Option<Self>> {
         let sources = AudioSource::from_settings(config)?;
 
         if sources.is_empty() {
@@ -36,6 +34,7 @@ impl AudioGraph {
 
         let mut built_sources = Vec::new();
         let mut source_elements = Vec::new();
+        let mut capsfilters = Vec::new();
         let mut volumes = AudioVolumes {
             system: None,
             mic: None,
@@ -48,6 +47,11 @@ impl AudioGraph {
                     if let Some(src) = built.source.clone() {
                         source_elements.push(src);
                     }
+                    if let (Some(source_id), Some(capsfilter)) =
+                        (built.source_id, built.capsfilter.clone())
+                    {
+                        capsfilters.push((source_id, capsfilter));
+                    }
                     built_sources.push(built);
                 }
                 AudioSource::Mic(s) => {
@@ -55,6 +59,11 @@ impl AudioGraph {
                     volumes.mic = built.volume.clone();
                     if let Some(src) = built.source.clone() {
                         source_elements.push(src);
+                    }
+                    if let (Some(source_id), Some(capsfilter)) =
+                        (built.source_id, built.capsfilter.clone())
+                    {
+                        capsfilters.push((source_id, capsfilter));
                     }
                     built_sources.push(built);
                 }
@@ -76,6 +85,7 @@ impl AudioGraph {
             output: encoded,
             volumes,
             sources: source_elements,
+            capsfilters,
         }))
     }
 

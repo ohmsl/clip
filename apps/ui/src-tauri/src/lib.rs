@@ -12,7 +12,7 @@ use clip_service::{
         list_video_devices as list_video_devices_inner, AudioDevice, VideoDevice,
     },
     encoders::{list_video_encoders as list_video_encoders_inner, VideoEncoderDescriptor},
-    gst_capture::GstCapture,
+    gst_capture::{AudioCapsState, GstCapture},
     logger,
     ring_buffer::RingBuffer,
     settings::{
@@ -40,6 +40,7 @@ struct StatusResponse {
     ring_buffer_packets: usize,
     ring_buffer_bytes: u64,
     ring_buffer_duration_ms: u64,
+    audio_caps: AudioCapsState,
 }
 
 #[derive(Serialize)]
@@ -157,6 +158,11 @@ fn get_status(state: State<'_, Mutex<CaptureRuntime>>) -> StatusResponse {
     let guard = state.lock().unwrap();
     let rb = guard.ring_buffer.lock().unwrap();
     let buffer_seconds = (rb.duration_ms() / 1000) as u32;
+    let audio_caps = guard
+        .capture
+        .as_ref()
+        .map(|capture| capture.audio_caps())
+        .unwrap_or_default();
 
     StatusResponse {
         settings: guard.settings.clone(),
@@ -165,6 +171,7 @@ fn get_status(state: State<'_, Mutex<CaptureRuntime>>) -> StatusResponse {
         ring_buffer_packets: rb.len(),
         ring_buffer_bytes: rb.total_bytes(),
         ring_buffer_duration_ms: rb.duration_ms(),
+        audio_caps,
     }
 }
 

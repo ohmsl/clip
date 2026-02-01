@@ -3,7 +3,11 @@ use std::io;
 use gst::prelude::*;
 use gstreamer as gst;
 
-use crate::{audio::caps::AudioCapsChoice, capture_devices::AudioDeviceInfo, logger};
+use crate::{
+    audio::{caps::AudioCapsChoice, AudioSourceId},
+    capture_devices::AudioDeviceInfo,
+    logger,
+};
 
 use super::AudioSourceOutput;
 
@@ -96,6 +100,10 @@ impl SystemAudioSource {
 
         resample.set_property("quality", &10i32);
 
+        let rate = gst::ElementFactory::make("audiorate")
+            .build()
+            .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing audiorate"))?;
+
         let capsfilter = gst::ElementFactory::make("capsfilter")
             .build()
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing capsfilter"))?;
@@ -117,15 +125,31 @@ impl SystemAudioSource {
             .build()
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing queue element"))?;
 
-        queue.set_property("max-size-time", &100_000_000u64);
+        queue.set_property("max-size-time", &500_000_000u64);
         queue.set_property_from_str("leaky", "downstream");
 
         pipeline
-            .add_many(&[&src, &convert, &resample, &capsfilter, &volume, &queue])
+            .add_many(&[
+                &src,
+                &convert,
+                &resample,
+                &rate,
+                &capsfilter,
+                &volume,
+                &queue,
+            ])
             .map_err(|_| io::Error::new(io::ErrorKind::Other, "failed to add elements"))?;
 
-        gst::Element::link_many(&[&src, &convert, &resample, &capsfilter, &volume, &queue])
-            .map_err(|_| io::Error::new(io::ErrorKind::Other, "failed to link elements"))?;
+        gst::Element::link_many(&[
+            &src,
+            &convert,
+            &resample,
+            &rate,
+            &capsfilter,
+            &volume,
+            &queue,
+        ])
+        .map_err(|_| io::Error::new(io::ErrorKind::Other, "failed to link elements"))?;
 
         logger::info(
             "audio",
@@ -139,6 +163,8 @@ impl SystemAudioSource {
             element: queue,
             volume: Some(volume),
             source: Some(src),
+            capsfilter: Some(capsfilter),
+            source_id: Some(AudioSourceId::System),
         })
     }
 }

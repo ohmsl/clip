@@ -12,6 +12,7 @@ type StatusResponse = {
     ring_buffer_packets: number;
     ring_buffer_bytes: number;
     ring_buffer_duration_ms: number;
+    audio_caps: AudioCapsState;
 };
 
 type AudioCapsState = {
