@@ -1,12 +1,3 @@
-import {
-    addToast,
-    Button,
-    Input,
-    Select,
-    SelectItem,
-    Slider,
-    Switch,
-} from "@heroui/react";
 import { useQueryClient } from "@tanstack/react-query";
 import { open } from "@tauri-apps/plugin-dialog";
 import {
@@ -22,9 +13,22 @@ import { useMicrophoneDevices } from "../hooks/useMicrophoneDevices";
 import { useSettings } from "../hooks/useSettings";
 import { useVideoDevices } from "../hooks/useVideoDevices";
 import { useVideoEncoders } from "../hooks/useVideoEncoders";
+import { addToast } from "../lib/toast";
 import { useBackendConnectionStore } from "../state/backendConnection";
 import { UserSettings } from "../types/UserSettings";
 import { SectionTitle } from "./SectionTitle";
+import { Button } from "./ui/button";
+import { CardFooter } from "./ui/card";
+import { Input } from "./ui/input";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "./ui/select";
+import { Slider } from "./ui/slider";
+import { Switch } from "./ui/switch";
 
 export const SettingsView = () => {
     const navigate = useNavigate();
@@ -83,279 +87,304 @@ export const SettingsView = () => {
                 addToast({
                     title: "Settings updated",
                     severity: "success",
-                    color: "success",
                 });
             },
         });
     };
-    return (
-        <section className="flex flex-col gap-4 p-8">
-            <Button variant="light" onPress={() => navigate("/")} isIconOnly>
-                <ArrowLeftIcon />
-            </Button>
 
-            <div className="flex flex-col w-full gap-6 p-4 bg-content1 rounded-large border-1 border-divider">
-                <SectionTitle title="Video Source" Icon={TvMinimalPlayIcon}>
-                    <Select
-                        selectedKeys={
-                            form?.video_device_id ? [form.video_device_id] : []
-                        }
-                        onSelectionChange={(keys) => {
-                            const value = Array.from(keys)[0];
-                            if (typeof value === "string") {
-                                updateForm("video_device_id", value);
-                            }
-                        }}
-                        isDisabled={
-                            !form ||
-                            !videoDevices ||
-                            connectionStatus !== "connected"
-                        }
-                    >
+    return (
+        <section className="min-h-dvh flex flex-col gap-6 p-8">
+            <div className="flex items-center gap-4">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => navigate("/")}
+                    aria-label="Back"
+                >
+                    <ArrowLeftIcon />
+                </Button>
+                <div>
+                    <h1 className="text-2xl font-semibold">Settings</h1>
+                    <p className="text-sm text-muted-foreground">
+                        Tune capture, audio, and storage preferences.
+                    </p>
+                </div>
+            </div>
+
+            <SectionTitle title="Video Source" Icon={TvMinimalPlayIcon}>
+                <Select
+                    value={form?.video_device_id ?? ""}
+                    onValueChange={(value) =>
+                        value ? updateForm("video_device_id", value) : null
+                    }
+                    disabled={
+                        !form ||
+                        !videoDevices ||
+                        connectionStatus !== "connected"
+                    }
+                >
+                    <SelectTrigger className="w-full">
+                        <SelectValue placeholder="Select a display" />
+                    </SelectTrigger>
+                    <SelectContent>
                         {(videoDevices ?? []).map((device) => (
-                            <SelectItem
-                                key={device.id}
-                                textValue={device.label}
-                            >
-                                {`${device.label} (${device.id})`}
+                            <SelectItem key={device.id} value={device.id}>
+                                <div className="flex flex-col">
+                                    <span>{device.label}</span>
+                                    <span className="text-xs text-muted-foreground">
+                                        {device.id}
+                                    </span>
+                                </div>
                             </SelectItem>
                         ))}
-                    </Select>
-                </SectionTitle>
+                    </SelectContent>
+                </Select>
+            </SectionTitle>
 
-                <SectionTitle title="Audio Source" Icon={Volume2Icon}>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="flex justify-between items-center bg-default-100 rounded-medium px-3">
-                            <p className="text-medium">System audio</p>
-                            <Switch
-                                isSelected={form?.system_audio_enabled ?? false}
-                                onValueChange={(value) =>
-                                    updateForm("system_audio_enabled", value)
-                                }
-                                isDisabled={
-                                    !form || connectionStatus !== "connected"
-                                }
-                            />
-                        </div>
-
-                        <Select
-                            label="Microphone"
-                            selectedKeys={
-                                form?.mic_device_id
-                                    ? [form.mic_device_id]
-                                    : ["none"]
+            <SectionTitle title="Audio Source" Icon={Volume2Icon}>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="flex justify-between items-center rounded-md border border-border bg-muted px-3 py-2">
+                        <p className="text-sm font-medium">System audio</p>
+                        <Switch
+                            checked={form?.system_audio_enabled ?? false}
+                            onCheckedChange={(value: boolean) =>
+                                updateForm("system_audio_enabled", value)
                             }
-                            items={microphoneDevices ?? []}
-                            onSelectionChange={(keys) => {
-                                const value = Array.from(keys)[0];
-                                if (typeof value === "string") {
-                                    updateForm(
-                                        "mic_device_id",
-                                        value === "none" ? null : value,
-                                    );
-                                }
-                            }}
-                            isDisabled={
+                            disabled={!form || connectionStatus !== "connected"}
+                        />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                        <span className="text-sm font-medium">Microphone</span>
+                        <Select
+                            value={form?.mic_device_id ?? "none"}
+                            onValueChange={(value) =>
+                                updateForm(
+                                    "mic_device_id",
+                                    value === "none" ? null : value,
+                                )
+                            }
+                            disabled={
                                 !form ||
                                 !microphoneDevices ||
                                 connectionStatus !== "connected"
                             }
-                            renderValue={(items) => {
-                                return items.map((item) => (
-                                    <div
-                                        className="flex items-center"
-                                        key={item.data?.id}
-                                    >
-                                        <p className="mr-2">
-                                            {item.data?.label}
-                                        </p>
-                                        <p className="text-xs text-neutral-500">
-                                            {item.data?.id}
-                                        </p>
-                                    </div>
-                                ));
-                            }}
                         >
-                            {(device) => (
-                                <SelectItem
-                                    key={device.id}
-                                    textValue={device.label}
-                                >
-                                    {device.label}
-                                </SelectItem>
-                            )}
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select microphone" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {(microphoneDevices ?? []).map((device) => (
+                                    <SelectItem
+                                        key={device.id}
+                                        value={device.id}
+                                    >
+                                        <div className="flex flex-col">
+                                            <span>{device.label}</span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {device.id}
+                                            </span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
                         </Select>
                     </div>
+                </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                        <span className="text-sm font-medium">
+                            System volume
+                        </span>
                         <Slider
-                            label="System volume"
-                            minValue={0}
-                            maxValue={2}
+                            min={0}
+                            max={2}
                             step={0.05}
-                            value={form?.system_audio_volume ?? 1}
-                            onChange={(value) => {
-                                const parsed = Number(value);
+                            value={[form?.system_audio_volume ?? 1]}
+                            onValueChange={(value: number | number[]) => {
+                                const parsed = Number(
+                                    Array.isArray(value) ? value[0] : value,
+                                );
                                 if (!Number.isNaN(parsed)) {
                                     updateForm("system_audio_volume", parsed);
                                 }
                             }}
-                            isDisabled={
+                            disabled={
                                 !form ||
                                 !form.system_audio_enabled ||
                                 connectionStatus !== "connected"
                             }
                         />
+                    </div>
 
+                    <div className="flex flex-col gap-2">
+                        <span className="text-sm font-medium">Mic volume</span>
                         <Slider
-                            label="Mic volume"
-                            minValue={0}
-                            maxValue={2}
+                            min={0}
+                            max={2}
                             step={0.05}
-                            value={form?.mic_volume ?? 1}
-                            onChange={(value) => {
-                                const parsed = Number(value);
+                            value={[form?.mic_volume ?? 1]}
+                            onValueChange={(value: number | number[]) => {
+                                const parsed = Number(
+                                    Array.isArray(value) ? value[0] : value,
+                                );
                                 if (!Number.isNaN(parsed)) {
                                     updateForm("mic_volume", parsed);
                                 }
                             }}
-                            isDisabled={
+                            disabled={
                                 !form ||
                                 !form.mic_device_id ||
                                 connectionStatus !== "connected"
                             }
                         />
                     </div>
-                </SectionTitle>
+                </div>
+            </SectionTitle>
 
-                <SectionTitle title="Encoder Settings" Icon={BinaryIcon}>
-                    <div className="grid grid-cols-2 gap-4">
+            <SectionTitle title="Encoder Settings" Icon={BinaryIcon}>
+                <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-2">
+                        <span className="text-sm font-medium">Framerate</span>
                         <Input
                             type="number"
                             min={1}
-                            label="Framerate"
                             value={
                                 typeof form?.framerate === "number"
                                     ? String(form.framerate)
                                     : ""
                             }
-                            onValueChange={(value) => {
-                                const parsed = Number(value);
+                            onChange={(event) => {
+                                const parsed = Number(event.target.value);
                                 if (!Number.isNaN(parsed)) {
                                     updateForm("framerate", parsed);
                                 }
                             }}
-                            isDisabled={
-                                !form || connectionStatus !== "connected"
-                            }
+                            disabled={!form || connectionStatus !== "connected"}
                         />
+                    </div>
 
+                    <div className="flex flex-col gap-2">
+                        <span className="text-sm font-medium">
+                            Video encoder
+                        </span>
                         <Select
-                            label="Video encoder"
-                            selectedKeys={
-                                form?.video_encoder_id
-                                    ? [form.video_encoder_id]
-                                    : []
+                            value={form?.video_encoder_id ?? ""}
+                            onValueChange={(value) =>
+                                value
+                                    ? updateForm("video_encoder_id", value)
+                                    : null
                             }
-                            onSelectionChange={(keys) => {
-                                const value = Array.from(keys)[0];
-                                if (typeof value === "string") {
-                                    updateForm("video_encoder_id", value);
-                                }
-                            }}
-                            isDisabled={
+                            disabled={
                                 !form ||
                                 !encoders ||
                                 connectionStatus !== "connected"
                             }
                         >
-                            {(encoders ?? []).map((encoder) => {
-                                const suffixParts: string[] = [];
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select encoder" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {(encoders ?? []).map((encoder) => {
+                                    const suffixParts: string[] = [];
 
-                                if (encoder.is_hardware) {
-                                    suffixParts.push("GPU");
-                                }
+                                    if (encoder.is_hardware) {
+                                        suffixParts.push("GPU");
+                                    }
 
-                                if (encoder.required_memory) {
-                                    suffixParts.push(encoder.required_memory);
-                                }
+                                    if (encoder.required_memory) {
+                                        suffixParts.push(
+                                            encoder.required_memory,
+                                        );
+                                    }
 
-                                const suffix =
-                                    suffixParts.length > 0
-                                        ? ` (${suffixParts.join(", ")})`
-                                        : "";
+                                    const suffix =
+                                        suffixParts.length > 0
+                                            ? ` (${suffixParts.join(", ")})`
+                                            : "";
 
-                                return (
-                                    <SelectItem
-                                        key={encoder.id}
-                                        textValue={encoder.name}
-                                    >
-                                        {`${encoder.name}${suffix}`}
-                                        <p className="text-xs text-neutral-400">
-                                            {encoder.id}
-                                        </p>
-                                    </SelectItem>
-                                );
-                            })}
+                                    return (
+                                        <SelectItem
+                                            key={encoder.id}
+                                            value={encoder.id}
+                                        >
+                                            <div className="flex flex-col">
+                                                <span>
+                                                    {encoder.name}
+                                                    {suffix}
+                                                </span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    {encoder.id}
+                                                </span>
+                                            </div>
+                                        </SelectItem>
+                                    );
+                                })}
+                            </SelectContent>
                         </Select>
                     </div>
+                </div>
 
+                <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium">Bitrate (kbps)</span>
                     <Slider
-                        label="Bitrate (kbps)"
-                        minValue={1000}
-                        maxValue={20000}
+                        min={1000}
+                        max={20000}
                         step={1000}
-                        value={form?.bitrate_kbps}
-                        onChange={(value) => {
-                            const parsed = Number(value);
+                        value={[form?.bitrate_kbps ?? 1000]}
+                        onValueChange={(value: number | number[]) => {
+                            const parsed = Number(
+                                Array.isArray(value) ? value[0] : value,
+                            );
                             if (!Number.isNaN(parsed)) {
                                 updateForm("bitrate_kbps", parsed);
                             }
                         }}
-                        isDisabled={!form || connectionStatus !== "connected"}
-                        showSteps
+                        disabled={!form || connectionStatus !== "connected"}
                     />
-                </SectionTitle>
+                </div>
+            </SectionTitle>
 
-                <SectionTitle title="Storage" Icon={DatabaseIcon}>
-                    <div className="flex gap-3 items-end">
+            <SectionTitle title="Storage" Icon={DatabaseIcon}>
+                <div className="flex gap-3 items-end">
+                    <div className="flex flex-1 flex-col gap-2">
+                        <span className="text-sm font-medium">
+                            Clips directory
+                        </span>
                         <Input
-                            label="Clips directory"
                             value={form?.clips_dir ?? ""}
                             readOnly
-                            isDisabled={
-                                !form || connectionStatus !== "connected"
-                            }
+                            disabled={!form || connectionStatus !== "connected"}
                             className="flex-1"
                         />
-                        <Button
-                            variant="flat"
-                            onPress={async () => {
-                                if (!form) {
-                                    return;
-                                }
-                                const selected = await open({
-                                    directory: true,
-                                    multiple: false,
-                                    title: "Select clips directory",
-                                });
-                                if (typeof selected === "string") {
-                                    updateForm("clips_dir", selected);
-                                }
-                            }}
-                            isDisabled={
-                                !form || connectionStatus !== "connected"
-                            }
-                        >
-                            Choose folder
-                        </Button>
                     </div>
-                </SectionTitle>
-
+                    <Button
+                        variant="outline"
+                        onClick={async () => {
+                            if (!form) {
+                                return;
+                            }
+                            const selected = await open({
+                                directory: true,
+                                multiple: false,
+                                title: "Select clips directory",
+                            });
+                            if (typeof selected === "string") {
+                                updateForm("clips_dir", selected);
+                            }
+                        }}
+                        disabled={!form || connectionStatus !== "connected"}
+                    >
+                        Choose folder
+                    </Button>
+                </div>
+            </SectionTitle>
+            <CardFooter className="justify-end border-t border-border">
                 <Button
-                    color="primary"
-                    onPress={handleApplySettings}
-                    isDisabled={
+                    onClick={handleApplySettings}
+                    disabled={
                         !form ||
                         settingsMutation.isPending ||
                         connectionStatus !== "connected"
@@ -363,7 +392,7 @@ export const SettingsView = () => {
                 >
                     Apply Settings
                 </Button>
-            </div>
+            </CardFooter>
         </section>
     );
 };

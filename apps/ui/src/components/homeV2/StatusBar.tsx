@@ -127,12 +127,12 @@ export const StatusBar = () => {
                 {isRunning && captureConfigLabel ? (
                     <>
                         <div>{captureConfigLabel}</div>
-                        <div className="text-neutral-400">
+                        <div className="text-muted-foreground">
                             {encoderName ?? "Encoder unknown"}
                         </div>
                     </>
                 ) : (
-                    <div className="text-neutral-400">Not capturing</div>
+                    <div className="text-muted-foreground">Not capturing</div>
                 )}
             </div>
         </div>

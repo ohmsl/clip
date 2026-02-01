@@ -1,8 +1,8 @@
-import { addToast } from "@heroui/react";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { AudioDevice } from "../types/devices/AudioDevice";
 import { useBackendConnectionStore } from "../state/backendConnection";
+import { addToast } from "../lib/toast";
 
 export const useAudioDevices = () => {
     const status = useBackendConnectionStore((state) => state.status);

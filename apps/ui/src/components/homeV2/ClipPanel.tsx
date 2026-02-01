@@ -1,14 +1,14 @@
-﻿import {
-    Button,
-    Dropdown,
-    DropdownItem,
-    DropdownMenu,
-    DropdownTrigger,
-} from "@heroui/react";
 import { CogIcon, LogsIcon } from "lucide-react";
 import { useNavigate } from "react-router";
 import { useBackendConnectionStore } from "../../state/backendConnection";
 import { useCaptureStore } from "../../state/captureRuntime";
+import { Button } from "../ui/button";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 export const ClipPanel = () => {
     const navigate = useNavigate();
@@ -41,49 +41,45 @@ export const ClipPanel = () => {
         <div className="flex-1 flex items-center justify-center">
             <div className="flex flex-col items-center gap-3">
                 <Button
-                    color="primary"
-                    className="w-100 h-24 text-default-900 text-4xl font-semibold tracking-wide rounded-none"
+                    className="w-100 h-24 text-4xl font-semibold tracking-wide rounded-none"
                     disabled={
                         isCaptureUnavailable || connectionStatus !== "connected"
                     }
-                    onPress={() => requestClip(connectionStatus)}
+                    onClick={() => requestClip(connectionStatus)}
                 >
                     {label}
                 </Button>
 
-                <div className="text-sm text-neutral-400 font-mono">
+                <div className="text-sm text-muted-foreground font-mono">
                     last {clipSeconds}s
                 </div>
                 {errorNote ? (
-                    <div className="text-xs text-red-400 font-mono">
+                    <div className="text-xs text-destructive font-mono">
                         {errorNote}
                     </div>
                 ) : null}
 
-                <Dropdown>
-                    <DropdownTrigger>
-                        <Button variant="light" className="text-neutral-400">
+                <DropdownMenu>
+                    <DropdownMenuTrigger>
+                        <Button
+                            variant="ghost"
+                            className="text-muted-foreground"
+                        >
                             More
                         </Button>
-                    </DropdownTrigger>
+                    </DropdownMenuTrigger>
 
-                    <DropdownMenu>
-                        <DropdownItem
-                            key="log"
-                            startContent={<LogsIcon className="w-5 h-5 mr-2" />}
-                            onPress={() => navigate("log")}
-                        >
+                    <DropdownMenuContent>
+                        <DropdownMenuItem onClick={() => navigate("log")}>
+                            <LogsIcon className="w-4 h-4" />
                             Log
-                        </DropdownItem>
-                        <DropdownItem
-                            key="settings"
-                            startContent={<CogIcon className="w-5 h-5 mr-2" />}
-                            onPress={() => navigate("settings")}
-                        >
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate("settings")}>
+                            <CogIcon className="w-4 h-4" />
                             Settings
-                        </DropdownItem>
-                    </DropdownMenu>
-                </Dropdown>
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </div>
     );

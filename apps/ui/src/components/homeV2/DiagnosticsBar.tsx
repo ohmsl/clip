@@ -105,7 +105,7 @@ export const DiagnosticsBar = () => {
     );
 
     return (
-        <div className="flex justify-between px-8 py-4 text-sm font-mono text-neutral-400 border-t border-neutral-800">
+        <div className="flex justify-between px-8 py-4 text-sm font-mono text-muted-foreground border-t border-border">
             <div className="space-y-1">
                 <div>{systemAudioLine}</div>
                 <div>{micAudioLine}</div>

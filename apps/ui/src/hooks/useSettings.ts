@@ -1,8 +1,8 @@
-import { addToast } from "@heroui/react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useBackendConnectionStore } from "../state/backendConnection";
 import { UserSettings } from "../types/UserSettings";
+import { addToast } from "../lib/toast";
 
 export const useSettings = () => {
     const status = useBackendConnectionStore((state) => state.status);
@@ -18,7 +18,6 @@ export const useSettings = () => {
                     title: "Error fetching settings",
                     description: error.message,
                     severity: "danger",
-                    color: "danger",
                 });
                 return true;
             },
@@ -34,7 +33,6 @@ export const useSettings = () => {
                     title: "Error updating settings",
                     description: error.message,
                     severity: "danger",
-                    color: "danger",
                 });
             },
         }),

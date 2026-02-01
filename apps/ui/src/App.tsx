@@ -1,6 +1,6 @@
-import { ToastProvider } from "@heroui/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Route, Routes } from "react-router";
+import { Toaster } from "sonner";
 import { LogView } from "./components/LogView";
 import { SettingsView } from "./components/SettingsView";
 import "./globals.css";
@@ -12,9 +12,8 @@ function App() {
 
     return (
         <QueryClientProvider client={new QueryClient()}>
-            <div className="bg-background">
-                <ToastProvider />
-
+            <div className="root min-h-dvh bg-background text-foreground">
+                <Toaster richColors theme="dark" />
                 <BrowserRouter>
                     <Routes>
                         <Route path="/" element={<Home />} />

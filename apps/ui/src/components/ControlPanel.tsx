@@ -1,4 +1,5 @@
-import { Button, Divider } from "@heroui/react";
+import { Button } from "./ui/button";
+import { Separator } from "./ui/separator";
 import { invoke } from "@tauri-apps/api/core";
 import { openPath } from "@tauri-apps/plugin-opener";
 import { useBackendConnectionStore } from "../state/backendConnection";
@@ -24,35 +25,36 @@ export const ControlPanel = () => {
     }
 
     return (
-        <div className="flex flex-col gap-3 bg-content1 rounded-large p-4 border-1 border-divider">
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4">
             <Button
-                color="primary"
-                onPress={handlePressClip}
-                isDisabled={connectionStatus !== "connected"}
+                onClick={handlePressClip}
+                disabled={connectionStatus !== "connected"}
             >
                 Clip
             </Button>
 
             <Button
-                onPress={handlePressStatus}
-                isDisabled={connectionStatus !== "connected"}
+                variant="secondary"
+                onClick={handlePressStatus}
+                disabled={connectionStatus !== "connected"}
             >
                 Status
             </Button>
 
             <Button
-                onPress={handlePressListClips}
-                isDisabled={connectionStatus !== "connected"}
+                variant="secondary"
+                onClick={handlePressListClips}
+                disabled={connectionStatus !== "connected"}
             >
                 View Clips
             </Button>
 
-            <Divider />
+            <Separator />
 
             <Button
-                color="danger"
-                onPress={handlePressShutdown}
-                isDisabled={connectionStatus !== "connected"}
+                variant="destructive"
+                onClick={handlePressShutdown}
+                disabled={connectionStatus !== "connected"}
             >
                 Stop Capture
             </Button>

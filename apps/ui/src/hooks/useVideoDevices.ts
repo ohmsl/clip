@@ -1,4 +1,4 @@
-import { addToast } from "@heroui/react";
+import { addToast } from "../lib/toast";
 import { useQuery } from "@tanstack/react-query";
 import { invoke } from "@tauri-apps/api/core";
 import { useBackendConnectionStore } from "../state/backendConnection";
@@ -20,7 +20,6 @@ export const useVideoDevices = () => {
                     title: "Error fetching video devices",
                     description: error.message,
                     severity: "danger",
-                    color: "danger",
                 });
                 return true;
             },

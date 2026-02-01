@@ -15,23 +15,23 @@ export const StatusIndicator = ({
             case "running":
                 return { label: "REC", className: "text-foreground" };
             case "restarting":
-                return { label: "RST", className: "text-yellow-500" };
+                return { label: "RST", className: "text-amber-400" };
             case "error":
-                return { label: "ERR", className: "text-red-400" };
+                return { label: "ERR", className: "text-destructive" };
             case "stopped":
             case "unknown":
             default:
-                return { label: "OFF", className: "text-neutral-500" };
+                return { label: "OFF", className: "text-muted-foreground" };
         }
     }, [phase]);
 
     return (
         <div className="flex items-center gap-3">
             {phase === "running" && (
-                <span className="text-red-600 animate-pulse">●</span>
-            )}
-            <span className={className}>{label}</span>
-            <span className="text-neutral-400">{timerLabel}</span>
-        </div>
+            <span className="text-destructive animate-pulse">●</span>
+        )}
+        <span className={className}>{label}</span>
+        <span className="text-muted-foreground">{timerLabel}</span>
+    </div>
     );
 };
