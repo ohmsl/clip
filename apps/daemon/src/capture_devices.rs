@@ -11,6 +11,8 @@ pub struct VideoDevice {
     pub id: String,
     pub label: String,
     pub kind: VideoDeviceKind,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
 
     #[cfg(target_os = "windows")]
     pub monitor_index: Option<u32>,
@@ -39,6 +41,7 @@ mod windows {
     use crate::logger;
     use gst::prelude::*;
     use gstreamer as gst;
+    use std::collections::HashSet;
     use windows::{
         Win32::Foundation::{BOOL, LPARAM},
         Win32::Graphics::Gdi::{
@@ -74,11 +77,15 @@ mod windows {
             );
 
             let index = data.len() as u32;
+            let width = info.monitorInfo.rcMonitor.right - info.monitorInfo.rcMonitor.left;
+            let height = info.monitorInfo.rcMonitor.bottom - info.monitorInfo.rcMonitor.top;
 
             data.push(VideoDevice {
                 id: format!("screen:{}", index),
                 label,
                 kind: VideoDeviceKind::Screen,
+                width: Some(width as u32),
+                height: Some(height as u32),
                 monitor_index: Some(index),
             });
 
@@ -109,6 +116,7 @@ mod windows {
         monitor.stop();
 
         let mut microphones = Vec::new();
+        let mut seen_ids = HashSet::new();
 
         for device in devices {
             let device_class = device.device_class();
@@ -128,6 +136,9 @@ mod windows {
             let Some(id) = id else {
                 continue;
             };
+            if !seen_ids.insert(id.clone()) {
+                continue;
+            }
 
             let label = device.display_name().to_string();
             microphones.push(AudioDevice {

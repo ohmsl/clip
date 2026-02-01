@@ -11,6 +11,16 @@ export const useMicrophoneDevices = () => {
         query: useQuery({
             queryKey: ["audio", "microphones"],
             queryFn: () => invoke<Array<AudioDevice>>("list_microphone_devices"),
+            select: (devices) => {
+                const seen = new Set<string>();
+                return devices.filter((device) => {
+                    if (seen.has(device.id)) {
+                        return false;
+                    }
+                    seen.add(device.id);
+                    return true;
+                });
+            },
             enabled: status === "connected",
             throwOnError: (error) => {
                 console.error(error);

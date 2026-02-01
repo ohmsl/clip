@@ -33,6 +33,39 @@ const extractResolution = (label?: string | null) => {
     return null;
 };
 
+const resolveResolution = (width?: number, height?: number, label?: string | null) => {
+    if (width && height) {
+        return `${width}x${height}`;
+    }
+    return extractResolution(label ?? null);
+};
+
+const formatEncoderName = (encoderId?: string | null, encoderDescription?: string | null) => {
+    if (!encoderId) {
+        return encoderDescription ?? "Encoder unknown";
+    }
+    const id = encoderId.toLowerCase();
+    if (id.includes("nv") && id.includes("h264")) {
+        return "NVENC H.264";
+    }
+    if (id.includes("qsv") || id.includes("msdk")) {
+        return "Intel Quick Sync H.264";
+    }
+    if (id.includes("amf")) {
+        return "AMD AMF H.264";
+    }
+    if (id.includes("vaapi")) {
+        return "VAAPI H.264";
+    }
+    if (id.includes("mf") || id.includes("mediafoundation")) {
+        return "Media Foundation H.264";
+    }
+    if (id.includes("x264")) {
+        return "x264";
+    }
+    return encoderDescription ?? encoderId;
+};
+
 export const StatusBar = () => {
     const capturePhase = useCaptureStore((state) => state.capturePhase);
     const elapsedMs = useCaptureStore((state) => state.elapsedMs);
@@ -65,16 +98,22 @@ export const StatusBar = () => {
         const device = videoDevices.find(
             (entry) => entry.id === settings.video_device_id,
         );
-        const resolutionLabel = extractResolution(
+        const resolutionLabel = resolveResolution(
+            device?.width,
+            device?.height,
             device?.label ?? device?.id ?? null,
         );
         const encoder = encoders.find(
             (entry) => entry.id === settings.video_encoder_id,
         );
+        const encoderLabel = formatEncoderName(
+            encoder?.id ?? settings.video_encoder_id,
+            encoder?.description ?? null,
+        );
 
         return {
             captureConfigLabel: `${resolutionLabel ?? "Resolution unknown"} ${settings.framerate.toFixed(2)} FPS`,
-            encoderName: encoder?.description ?? settings.video_encoder_id,
+            encoderName: encoderLabel,
         };
     }, [encoders, settings, videoDevices]);
 

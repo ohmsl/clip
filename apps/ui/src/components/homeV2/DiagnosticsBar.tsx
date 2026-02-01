@@ -27,11 +27,12 @@ const formatChannels = (channels?: number) => {
     return `${channels}ch`;
 };
 
-const formatBitrate = (bitrateKbps?: number) => {
-    if (!bitrateKbps || bitrateKbps <= 0) {
+const formatThroughput = (bytes?: number, durationMs?: number) => {
+    if (!bytes || !durationMs || durationMs <= 0) {
         return null;
     }
-    return `${(bitrateKbps / 1000).toFixed(1)} Mbps`;
+    const mbps = (bytes * 8) / (durationMs * 1000);
+    return `${mbps.toFixed(1)} Mbps`;
 };
 
 const buildAudioLine = (label: string, input: AudioLineInput) => {
@@ -98,7 +99,10 @@ export const DiagnosticsBar = () => {
         typeof status?.buffer_seconds === "number"
             ? `${status.buffer_seconds}s`
             : "--";
-    const bitrateLabel = formatBitrate(settings?.bitrate_kbps) ?? "--";
+    const throughputLabel = formatThroughput(
+        status?.ring_buffer_bytes,
+        status?.ring_buffer_duration_ms,
+    );
 
     return (
         <div className="flex justify-between px-8 py-4 text-sm font-mono text-neutral-400 border-t border-neutral-800">
@@ -109,7 +113,7 @@ export const DiagnosticsBar = () => {
 
             <div className="text-right space-y-1">
                 <div>BUF • {bufferLabel}</div>
-                <div>{bitrateLabel}</div>
+                <div>THR • {throughputLabel ?? "--"}</div>
             </div>
         </div>
     );

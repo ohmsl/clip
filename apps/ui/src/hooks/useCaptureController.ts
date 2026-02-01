@@ -47,6 +47,27 @@ const parseCapsLog = (message: string) => {
     return { index, caps };
 };
 
+const parseCoercedCapsLog = (message: string) => {
+    const match = message.match(
+        /^(system|mic) audio coerced to mix caps: rate=(\d+), channels=(\d+)/,
+    );
+    if (!match) {
+        return null;
+    }
+    const source = match[1] === "system" ? "system" : "mic";
+    const rate = Number(match[2]);
+    const channels = Number(match[3]);
+    if (Number.isNaN(rate) || Number.isNaN(channels)) {
+        return null;
+    }
+    const caps: AudioCaps = {
+        rate,
+        channels,
+        raw: message,
+    };
+    return { source, caps };
+};
+
 const mapAudioIndexToSource = (index: number, settings: UserSettings) => {
     const systemEnabled = settings.system_audio_enabled;
     const micEnabled = !!settings.mic_device_id;
@@ -112,7 +133,7 @@ export const useCaptureController = () => {
                     if (!state.startedAt) {
                         setStartedAt(Date.now());
                     }
-                } else if (state.capturePhase !== "restarting") {
+                } else {
                     setCapturePhase("stopped");
                 }
             }
@@ -130,7 +151,7 @@ export const useCaptureController = () => {
     ]);
 
     useEffect(() => {
-        setRefreshStatus(() => refreshStatus);
+        setRefreshStatus(refreshStatus);
         return () => {
             setRefreshStatus(null);
         };
@@ -139,6 +160,17 @@ export const useCaptureController = () => {
     useEffect(() => {
         refreshStatus();
     }, [refreshStatus]);
+
+    useEffect(() => {
+        if (connectionStatus !== "connected") {
+            return;
+        }
+        const intervalMs = capturePhase === "running" ? 1000 : 5000;
+        const interval = setInterval(() => {
+            refreshStatus();
+        }, intervalMs);
+        return () => clearInterval(interval);
+    }, [capturePhase, connectionStatus, refreshStatus]);
 
     useEffect(() => {
         let active = true;
@@ -250,6 +282,17 @@ export const useCaptureController = () => {
                         ...update,
                     }),
                 );
+            }
+
+            if (log.source === "audio" && log.message.includes("audio coerced to mix caps")) {
+                const parsed = parseCoercedCapsLog(log.message);
+                if (!parsed) {
+                    return;
+                }
+                setAudioCaps({
+                    ...useCaptureStore.getState().audioCaps,
+                    [parsed.source]: parsed.caps,
+                });
             }
         };
 

@@ -76,6 +76,13 @@ impl RingBuffer {
         self.packets.len()
     }
 
+    pub fn total_bytes(&self) -> u64 {
+        self.packets
+            .iter()
+            .map(|packet| packet.data.len() as u64)
+            .sum()
+    }
+
     pub fn is_empty(&self) -> bool {
         self.packets.is_empty()
     }

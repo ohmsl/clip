@@ -38,6 +38,8 @@ struct StatusResponse {
     buffering: bool,
     buffer_seconds: u32,
     ring_buffer_packets: usize,
+    ring_buffer_bytes: u64,
+    ring_buffer_duration_ms: u64,
 }
 
 #[derive(Serialize)]
@@ -161,6 +163,8 @@ fn get_status(state: State<'_, Mutex<CaptureRuntime>>) -> StatusResponse {
         buffering: guard.capture.is_some(),
         buffer_seconds,
         ring_buffer_packets: rb.len(),
+        ring_buffer_bytes: rb.total_bytes(),
+        ring_buffer_duration_ms: rb.duration_ms(),
     }
 }
 
