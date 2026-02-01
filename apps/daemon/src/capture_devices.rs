@@ -1,5 +1,5 @@
-use serde::Serialize;
 use gstreamer as gst;
+use serde::Serialize;
 
 #[derive(Debug, Clone, Serialize)]
 pub enum VideoDeviceKind {
@@ -117,28 +117,13 @@ mod windows {
             }
 
             let props = device.properties();
-            let is_loopback = props
-                .as_ref()
-                .and_then(|props| props.get::<bool>("loopback").ok())
-                .unwrap_or(false);
+            let is_loopback = props.as_ref().map(is_loopback_device).unwrap_or(false);
 
             if is_loopback {
                 continue;
             }
 
-            let id = props
-                .as_ref()
-                .and_then(|props| props.get::<String>("device.id").ok())
-                .or_else(|| {
-                    props
-                        .as_ref()
-                        .and_then(|props| props.get::<String>("device-id").ok())
-                })
-                .or_else(|| {
-                    props
-                        .as_ref()
-                        .and_then(|props| props.get::<String>("device").ok())
-                });
+            let id = props.as_ref().and_then(device_id_from_props);
 
             let Some(id) = id else {
                 continue;
@@ -173,16 +158,38 @@ mod windows {
         props
             .get::<String>("device.id")
             .ok()
+            .or_else(|| props.get::<String>("device.strid").ok())
+            .or_else(|| props.get::<String>("device-id").ok())
+            .or_else(|| props.get::<String>("device").ok())
+    }
+
+    fn endpoint_id_from_props(props: &gst::Structure) -> Option<String> {
+        props
+            .get::<String>("device.id")
+            .ok()
+            .or_else(|| props.get::<String>("device.strid").ok())
             .or_else(|| props.get::<String>("device-id").ok())
             .or_else(|| props.get::<String>("device").ok())
     }
 
     fn is_loopback_device(props: &gst::Structure) -> bool {
-        props.get::<bool>("loopback").ok().unwrap_or(false)
+        let keys = [
+            "loopback",
+            "wasapi.device.loopback",
+            "wasapi2.device.loopback",
+        ];
+        keys.iter()
+            .any(|key| props.get::<bool>(*key).ok().unwrap_or(false))
     }
 
     fn is_default_device(props: &gst::Structure) -> bool {
-        let keys = ["is-default", "is-default-device", "is-default-render", "default"];
+        let keys = [
+            "is-default",
+            "is-default-device",
+            "is-default-render",
+            "default",
+            "device.default",
+        ];
         keys.iter()
             .any(|key| props.get::<bool>(*key).ok().unwrap_or(false))
     }
@@ -198,7 +205,7 @@ mod windows {
         }
 
         let id = device_id_from_props(&props)?;
-        let endpoint_id = props.get::<String>("device.id").ok();
+        let endpoint_id = endpoint_id_from_props(&props);
         let caps = device.caps().unwrap_or_else(gst::Caps::new_any);
         let label = device.display_name().to_string();
 
@@ -272,7 +279,10 @@ mod windows {
             return loopback_fallback;
         }
 
-        logger::warn("audio", "no WASAPI loopback device found; falling back to render sink");
+        logger::warn(
+            "audio",
+            "no WASAPI loopback device found; falling back to render sink",
+        );
 
         fallback
     }

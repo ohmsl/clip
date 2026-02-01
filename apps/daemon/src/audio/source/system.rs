@@ -22,6 +22,14 @@ impl SystemAudioSource {
         pipeline: &gst::Pipeline,
         volume_value: f32,
     ) -> io::Result<AudioSourceOutput> {
+        let make_wasapi_src = || -> io::Result<gst::Element> {
+            if let Ok(src) = gst::ElementFactory::make("wasapi2src").build() {
+                return Ok(src);
+            }
+            gst::ElementFactory::make("wasapisrc")
+                .build()
+                .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))
+        };
         let endpoint_note = self
             .device
             .endpoint_id
@@ -54,13 +62,10 @@ impl SystemAudioSource {
                     "audio",
                     format!("system create_element failed, falling back: {}", err),
                 );
-                let src = gst::ElementFactory::make("wasapisrc")
-                    .build()
-                    .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
-                if let Some(endpoint_id) = self.device.endpoint_id.as_ref() {
-                    if src.find_property("device").is_some() {
-                        src.set_property_from_str("device", endpoint_id);
-                    }
+                let src = make_wasapi_src()?;
+                if src.find_property("device").is_some() {
+                    let device_id = self.device.endpoint_id.as_ref().unwrap_or(&self.device.id);
+                    src.set_property_from_str("device", device_id);
                 }
                 src
             }
@@ -71,13 +76,10 @@ impl SystemAudioSource {
                 "audio",
                 "system device element is not a wasapisrc; recreating for loopback",
             );
-            src = gst::ElementFactory::make("wasapisrc")
-                .build()
-                .map_err(|_| io::Error::new(io::ErrorKind::Other, "missing wasapisrc"))?;
-            if let Some(endpoint_id) = self.device.endpoint_id.as_ref() {
-                if src.find_property("device").is_some() {
-                    src.set_property_from_str("device", endpoint_id);
-                }
+            src = make_wasapi_src()?;
+            if src.find_property("device").is_some() {
+                let device_id = self.device.endpoint_id.as_ref().unwrap_or(&self.device.id);
+                src.set_property_from_str("device", device_id);
             }
         }
 
