@@ -138,12 +138,8 @@ export const SettingsView = () => {
                 >
                     <ArrowLeftIcon />
                 </Button>
-                <div>
-                    <h1 className="text-2xl font-semibold">Settings</h1>
-                    <p className="text-sm text-muted-foreground">
-                        Tune capture, audio, and storage preferences.
-                    </p>
-                </div>
+
+                <h1 className="text-2xl font-semibold">Settings</h1>
             </div>
 
             <SectionTitle title="Video Source" Icon={TvMinimalPlayIcon}>
