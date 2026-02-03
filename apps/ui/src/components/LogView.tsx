@@ -36,7 +36,7 @@ export const LogView = () => {
                 </div>
             </div>
 
-            <ScrollArea className="max-h-[70vh] font-mono">
+            <ScrollArea className="overflow-y-auto font-mono">
                 {logs.length === 0 ? (
                     <div className="text-muted-foreground pt-4">
                         No logs yet.

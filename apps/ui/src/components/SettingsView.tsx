@@ -18,7 +18,6 @@ import { useBackendConnectionStore } from "../state/backendConnection";
 import { UserSettings } from "../types/UserSettings";
 import { SectionTitle } from "./SectionTitle";
 import { Button } from "./ui/button";
-import { CardFooter } from "./ui/card";
 import { Input } from "./ui/input";
 import {
     Select,
@@ -95,7 +94,8 @@ export const SettingsView = () => {
     };
 
     const formatShortcut = (event: React.KeyboardEvent<HTMLInputElement>) => {
-        const isModifier = ["Control", "Shift", "Alt", "Meta"].includes(
+        console.log(event);
+        const isModifier = ["Control", "Shift", "Alt", "Meta", "Fn"].includes(
             event.key,
         );
         if (isModifier) {
@@ -173,7 +173,7 @@ export const SettingsView = () => {
 
             <SectionTitle title="Audio Source" Icon={Volume2Icon}>
                 <div className="grid grid-cols-2 gap-4">
-                    <div className="flex justify-between items-center rounded-md border border-border bg-muted px-3 py-2">
+                    <div className="flex justify-between items-center rounded-md border border-border bg-popover px-3 py-2">
                         <p className="text-sm font-medium">System audio</p>
                         <Switch
                             checked={form?.system_audio_enabled ?? false}
@@ -220,9 +220,16 @@ export const SettingsView = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                     <div className="flex flex-col gap-2">
-                        <span className="text-sm font-medium">
-                            System volume
-                        </span>
+                        <div className="flex gap-2 justify-between">
+                            <span className="text-sm font-medium">
+                                System volume
+                            </span>
+
+                            <span className="text-sm font-medium text-muted-foreground">
+                                {form?.system_audio_volume ?? 1}
+                            </span>
+                        </div>
+
                         <Slider
                             min={0}
                             max={2}
@@ -245,7 +252,15 @@ export const SettingsView = () => {
                     </div>
 
                     <div className="flex flex-col gap-2">
-                        <span className="text-sm font-medium">Mic volume</span>
+                        <div className="flex gap-2 justify-between">
+                            <span className="text-sm font-medium">
+                                Mic volume
+                            </span>
+
+                            <span className="text-sm font-medium text-muted-foreground">
+                                {form?.mic_volume ?? 1}
+                            </span>
+                        </div>
                         <Slider
                             min={0}
                             max={2}
@@ -369,17 +384,11 @@ export const SettingsView = () => {
 
             <SectionTitle title="Storage" Icon={DatabaseIcon}>
                 <div className="flex gap-3 items-end">
-                    <div className="flex flex-1 flex-col gap-2">
-                        <span className="text-sm font-medium">
-                            Clips directory
-                        </span>
-                        <Input
-                            value={form?.clips_dir ?? ""}
-                            readOnly
-                            disabled={!form || connectionStatus !== "connected"}
-                            className="flex-1"
-                        />
-                    </div>
+                    <Input
+                        value={form?.clips_dir ?? ""}
+                        readOnly
+                        disabled={!form || connectionStatus !== "connected"}
+                    />
                     <Button
                         variant="outline"
                         onClick={async () => {
@@ -410,6 +419,7 @@ export const SettingsView = () => {
                         value={form?.shortcuts?.clip ?? ""}
                         placeholder="Ctrl+F10"
                         readOnly
+                        onClick={() => setIsRecordingShortcut(true)}
                         onFocus={() => setIsRecordingShortcut(true)}
                         onBlur={() => setIsRecordingShortcut(false)}
                         onKeyDown={(event) => {
@@ -448,7 +458,7 @@ export const SettingsView = () => {
                     </span>
                 </div>
             </SectionTitle>
-            <CardFooter className="justify-end border-t border-border">
+            <div className="flex justify-end">
                 <Button
                     onClick={handleApplySettings}
                     disabled={
@@ -459,7 +469,7 @@ export const SettingsView = () => {
                 >
                     Apply Settings
                 </Button>
-            </CardFooter>
+            </div>
         </section>
     );
 };
