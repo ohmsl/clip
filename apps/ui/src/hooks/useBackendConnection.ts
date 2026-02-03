@@ -2,10 +2,15 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useEffect, useRef } from "react";
 import { useBackendConnectionStore } from "../state/backendConnection";
+import { addToast } from "../lib/toast";
 
 type CaptureStatusEvent = {
     status: string;
     message?: string | null;
+};
+
+type ShortcutErrorEvent = {
+    message: string;
 };
 
 export const useBackendConnection = () => {
@@ -65,6 +70,22 @@ export const useBackendConnection = () => {
                     error instanceof Error ? error.message : "Event stream failed",
                 );
             });
+
+        listen<ShortcutErrorEvent>("shortcut-error", (event) => {
+            addToast({
+                title: "Shortcut unavailable",
+                description: event.payload.message,
+                severity: "warning",
+            });
+        }).catch((error) => {
+            if (!active) {
+                return;
+            }
+            setStatus("disconnected");
+            setLastError(
+                error instanceof Error ? error.message : "Event stream failed",
+            );
+        });
 
         return () => {
             active = false;

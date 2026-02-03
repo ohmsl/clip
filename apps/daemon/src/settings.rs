@@ -26,6 +26,13 @@ pub struct UserSettings {
     pub bitrate_kbps: u32,
     #[serde(default = "default_clips_dir")]
     pub clips_dir: String,
+    #[serde(default = "default_shortcuts")]
+    pub shortcuts: ShortcutSettings,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShortcutSettings {
+    pub clip: String,
 }
 
 pub fn settings_path() -> io::Result<PathBuf> {
@@ -76,6 +83,7 @@ pub fn default_settings(
         framerate: 60,
         bitrate_kbps: 20_000,
         clips_dir: default_clips_dir(),
+        shortcuts: default_shortcuts(),
     })
 }
 
@@ -139,6 +147,11 @@ pub fn apply_startup_fallbacks(
         changes.push("clips directory reset to default".to_string());
     }
 
+    if settings.shortcuts.clip.trim().is_empty() {
+        settings.shortcuts = default_shortcuts();
+        changes.push("clip shortcut reset to default".to_string());
+    }
+
     (settings, changes)
 }
 
@@ -189,6 +202,10 @@ pub fn validate_settings(
         return Err("clips directory must not be empty".to_string());
     }
 
+    if settings.shortcuts.clip.trim().is_empty() {
+        return Err("clip shortcut must not be empty".to_string());
+    }
+
     Ok(())
 }
 
@@ -229,4 +246,14 @@ fn default_mic_volume() -> f32 {
 
 fn default_clips_dir() -> String {
     "clips".to_string()
+}
+
+fn default_shortcuts() -> ShortcutSettings {
+    ShortcutSettings {
+        clip: default_clip_shortcut(),
+    }
+}
+
+fn default_clip_shortcut() -> String {
+    "Ctrl+F10".to_string()
 }

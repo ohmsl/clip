@@ -27,6 +27,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "./ui/select";
+import { Separator } from "./ui/separator";
 import { Slider } from "./ui/slider";
 import { Switch } from "./ui/switch";
 
@@ -54,6 +55,7 @@ export const SettingsView = () => {
     const connectionStatus = useBackendConnectionStore((state) => state.status);
 
     const [form, setForm] = useState<UserSettings | null>(null);
+    const [isRecordingShortcut, setIsRecordingShortcut] = useState(false);
 
     useEffect(() => {
         if (settings) {
@@ -90,6 +92,39 @@ export const SettingsView = () => {
                 });
             },
         });
+    };
+
+    const formatShortcut = (event: React.KeyboardEvent<HTMLInputElement>) => {
+        const isModifier = ["Control", "Shift", "Alt", "Meta"].includes(
+            event.key,
+        );
+        if (isModifier) {
+            return null;
+        }
+
+        const parts: string[] = [];
+        if (event.ctrlKey) {
+            parts.push("Ctrl");
+        }
+        if (event.altKey) {
+            parts.push("Alt");
+        }
+        if (event.shiftKey) {
+            parts.push("Shift");
+        }
+        if (event.metaKey) {
+            parts.push("Meta");
+        }
+
+        let key = event.key;
+        if (key.length === 1) {
+            key = key.toUpperCase();
+        } else if (key === " ") {
+            key = "Space";
+        }
+
+        parts.push(key);
+        return parts.join("+");
     };
 
     return (
@@ -129,12 +164,7 @@ export const SettingsView = () => {
                     <SelectContent>
                         {(videoDevices ?? []).map((device) => (
                             <SelectItem key={device.id} value={device.id}>
-                                <div className="flex flex-col">
-                                    <span>{device.label}</span>
-                                    <span className="text-xs text-muted-foreground">
-                                        {device.id}
-                                    </span>
-                                </div>
+                                {device.label}
                             </SelectItem>
                         ))}
                     </SelectContent>
@@ -180,12 +210,7 @@ export const SettingsView = () => {
                                         key={device.id}
                                         value={device.id}
                                     >
-                                        <div className="flex flex-col">
-                                            <span>{device.label}</span>
-                                            <span className="text-xs text-muted-foreground">
-                                                {device.id}
-                                            </span>
-                                        </div>
+                                        {device.label}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -310,15 +335,8 @@ export const SettingsView = () => {
                                             key={encoder.id}
                                             value={encoder.id}
                                         >
-                                            <div className="flex flex-col">
-                                                <span>
-                                                    {encoder.name}
-                                                    {suffix}
-                                                </span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {encoder.id}
-                                                </span>
-                                            </div>
+                                            {encoder.name}
+                                            {suffix} ({encoder.id})
                                         </SelectItem>
                                     );
                                 })}
@@ -346,6 +364,8 @@ export const SettingsView = () => {
                     />
                 </div>
             </SectionTitle>
+
+            <Separator />
 
             <SectionTitle title="Storage" Icon={DatabaseIcon}>
                 <div className="flex gap-3 items-end">
@@ -379,6 +399,53 @@ export const SettingsView = () => {
                     >
                         Choose folder
                     </Button>
+                </div>
+            </SectionTitle>
+            <Separator />
+
+            <SectionTitle title="Shortcuts" Icon={DatabaseIcon}>
+                <div className="flex flex-col gap-2">
+                    <span className="text-sm font-medium">Clip shortcut</span>
+                    <Input
+                        value={form?.shortcuts?.clip ?? ""}
+                        placeholder="Ctrl+F10"
+                        readOnly
+                        onFocus={() => setIsRecordingShortcut(true)}
+                        onBlur={() => setIsRecordingShortcut(false)}
+                        onKeyDown={(event) => {
+                            if (!isRecordingShortcut) {
+                                return;
+                            }
+                            if (event.key === "Escape") {
+                                setIsRecordingShortcut(false);
+                                return;
+                            }
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const shortcut = formatShortcut(event);
+                            if (!shortcut) {
+                                return;
+                            }
+                            setForm((prev) =>
+                                prev
+                                    ? {
+                                          ...prev,
+                                          shortcuts: {
+                                              ...prev.shortcuts,
+                                              clip: shortcut,
+                                          },
+                                      }
+                                    : prev,
+                            );
+                            setIsRecordingShortcut(false);
+                        }}
+                        disabled={!form || connectionStatus !== "connected"}
+                    />
+                    <span className="text-xs text-muted-foreground">
+                        {isRecordingShortcut
+                            ? "Press a key combo. Esc to cancel."
+                            : "Click to record a shortcut. Ctrl+F10 is the default."}
+                    </span>
                 </div>
             </SectionTitle>
             <CardFooter className="justify-end border-t border-border">

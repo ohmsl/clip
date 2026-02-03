@@ -25,11 +25,22 @@ use gst::prelude::*;
 use gstreamer as gst;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 struct CaptureRuntime {
     settings: UserSettings,
     capture: Option<GstCapture>,
     ring_buffer: Arc<Mutex<RingBuffer>>,
+}
+
+#[derive(Debug, Clone, Copy)]
+enum ShortcutAction {
+    Clip,
+}
+
+struct ShortcutBinding {
+    action: ShortcutAction,
+    accelerator: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -63,12 +74,22 @@ struct CaptureStatusEvent {
     message: Option<String>,
 }
 
+#[derive(Clone, Serialize)]
+struct ShortcutErrorEvent {
+    message: String,
+}
+
 fn emit_capture_status(app: &AppHandle, status: &str, message: Option<String>) {
     let payload = CaptureStatusEvent {
         status: status.to_string(),
         message,
     };
     let _ = app.emit("capture-status", payload);
+}
+
+fn emit_shortcut_error(app: &AppHandle, message: String) {
+    let payload = ShortcutErrorEvent { message };
+    let _ = app.emit("shortcut-error", payload);
 }
 
 fn should_restart_capture(a: &UserSettings, b: &UserSettings) -> bool {
@@ -93,6 +114,50 @@ fn apply_volume_elements(
         let value = settings.mic_volume as f64;
         element.set_property("volume", &value);
     }
+}
+
+fn build_shortcuts(settings: &UserSettings) -> Vec<ShortcutBinding> {
+    vec![ShortcutBinding {
+        action: ShortcutAction::Clip,
+        accelerator: settings.shortcuts.clip.clone(),
+    }]
+}
+
+fn register_shortcuts(app: &AppHandle, settings: &UserSettings) -> Result<(), String> {
+    let manager = app.global_shortcut();
+    manager.unregister_all().map_err(|err| err.to_string())?;
+
+    for binding in build_shortcuts(settings) {
+        let action = binding.action;
+        let accelerator = binding.accelerator.clone();
+        let accel_for_log = accelerator.clone();
+        manager
+            .on_shortcut(accelerator.as_str(), move |app, _shortcut, _event| {
+                let app_handle = app.clone();
+                logger::info("shortcut", format!("triggered {}", accel_for_log));
+                match action {
+                    ShortcutAction::Clip => trigger_clip(app_handle),
+                }
+            })
+            .map_err(|err| format!("failed to register {}: {}", accelerator, err))?;
+        logger::info("shortcut", format!("registered {}", accelerator));
+    }
+
+    Ok(())
+}
+
+fn trigger_clip(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        let state = app.state::<Mutex<CaptureRuntime>>();
+        match clip(state).await {
+            Ok(info) => {
+                logger::info("shortcut", format!("clip saved: {}", info.filename));
+            }
+            Err(err) => {
+                logger::error("shortcut", format!("clip failed: {}", err));
+            }
+        }
+    });
 }
 
 fn replace_capture(state: &State<'_, Mutex<CaptureRuntime>>, new_capture: Option<GstCapture>) {
@@ -280,6 +345,11 @@ fn update_settings(
 
     logger::info("settings", "updated and capture restarted");
     emit_capture_status(&app, "running", None);
+
+    if let Err(err) = register_shortcuts(&app, &saved_settings) {
+        logger::error("shortcut", format!("register failed: {}", err));
+        emit_shortcut_error(&app, err);
+    }
 
     Ok(saved_settings)
 }
@@ -500,9 +570,15 @@ pub fn run() {
                 }
             }
 
+            if let Err(err) = register_shortcuts(&app.handle(), &settings) {
+                logger::error("shortcut", format!("register failed: {}", err));
+                emit_shortcut_error(&app.handle(), err);
+            }
+
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             get_status,

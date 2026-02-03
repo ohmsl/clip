@@ -8,4 +8,7 @@ export type UserSettings = {
     framerate: number;
     bitrate_kbps: number;
     clips_dir: string;
+    shortcuts: {
+        clip: string;
+    };
 };
