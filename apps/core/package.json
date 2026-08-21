@@ -1,8 +1,8 @@
 {
-    "name": "@clip/daemon",
-    "private": true,
-    "scripts": {
-        "dev": "cargo run",
-        "build": "cargo build --release"
-    }
+        "name": "@clip/core",
+        "private": true,
+        "scripts": {
+            "dev": "cargo build",
+            "build": "cargo build --release"
+        }
 }

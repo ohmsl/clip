@@ -4,11 +4,12 @@
     "version": "1.0.0",
     "description": "",
     "scripts": {
+        "setup": "bash ./setup.sh",
         "dev": "pnpm -r dev",
         "build": "pnpm -r build",
         "lint": "pnpm -r lint",
         "ui": "pnpm --filter ./apps/ui dev",
-        "daemon": "pnpm --filter ./apps/daemon dev"
+        "core": "pnpm --filter ./apps/core dev"
     },
     "devDependencies": {
         "eslint": "^9.0.0",
