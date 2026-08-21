@@ -68,13 +68,14 @@ pub fn default_settings(
     video_devices: &[VideoDevice],
     encoders: &[VideoEncoderDescriptor],
 ) -> io::Result<UserSettings> {
-    let default_video = prefer_screen_device(video_devices)
-        .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no video devices available"))?;
+    let default_video = prefer_screen_device(video_devices);
     let default_encoder = prefer_hardware_encoder(encoders)
         .ok_or_else(|| io::Error::new(io::ErrorKind::Other, "no video encoders available"))?;
 
     Ok(UserSettings {
-        video_device_id: default_video.id.clone(),
+        video_device_id: default_video
+            .map(|device| device.id.clone())
+            .unwrap_or_else(|| "screen:0".to_string()),
         system_audio_enabled: true,
         system_audio_volume: default_system_audio_volume(),
         mic_device_id: None,
