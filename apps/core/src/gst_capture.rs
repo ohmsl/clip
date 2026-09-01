@@ -144,10 +144,15 @@ impl GstCapture {
 
         let (packet_tx, packet_rx) = crossbeam_channel::bounded::<Packet>(1024);
         let tx = packet_tx.clone();
+        let callback_guard_for_callback = callback_guard.clone();
 
         appsink.set_callbacks(
             gst_app::AppSinkCallbacks::builder()
                 .new_sample(move |sink| {
+                    if callback_guard_for_callback.load(Ordering::Acquire) {
+                        return Ok(gst::FlowSuccess::Ok);
+                    }
+
                     let sample = sink.pull_sample().map_err(|_| gst::FlowError::Error)?;
                     let buffer = sample.buffer().ok_or(gst::FlowError::Error)?;
 
@@ -159,8 +164,12 @@ impl GstCapture {
                             data: map.as_slice().to_vec(),
                         };
 
-                        // Non blocking send, if full: drop.
-                        let _ = tx.try_send(packet);
+                        // Non blocking send, if full: drop. Teardown may begin
+                        // after the guard check, so the channel remains the
+                        // final synchronization boundary for this callback.
+                        if !callback_guard_for_callback.load(Ordering::Acquire) {
+                            let _ = tx.try_send(packet);
+                        }
                     }
 
                     Ok(gst::FlowSuccess::Ok)

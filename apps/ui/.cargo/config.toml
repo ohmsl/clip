@@ -1,0 +1,26 @@
+[patch."https://github.com/zed-industries/zed"]
+gpui = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/zed-a70e2ad075855582/f1d27d5/crates/gpui" }
+gpui_macros = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/zed-a70e2ad075855582/f1d27d5/crates/gpui_macros" }
+gpui_platform = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/zed-a70e2ad075855582/f1d27d5/crates/gpui_platform" }
+
+[patch."https://github.com/longbridge/gpui-component"]
+gpui-base = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/7885c41/crates/base" }
+gpui-component = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/7885c41/crates/ui" }
+gpui-component-assets = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/gpui-component-95ce574d8a0da8b8/7885c41/crates/assets" }
+
+[patch."https://github.com/zed-industries/scap"]
+zed-scap = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/scap-40ad33e1dd47aaea/4afea48" }
+
+
+
+[patch."https://github.com/zed-industries/font-kit"]
+zed-font-kit = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/font-kit-2de8721bb3347bf4/94b0f28" }
+
+[patch."https://github.com/zed-industries/reqwest.git"]
+zed-reqwest = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/reqwest-dc13ba947e7b959e/c156624" }
+
+[patch."https://github.com/zed-industries/wasm_thread"]
+wasm_thread = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/wasm_thread-586cb4b723c583fe/0cf96c7" }
+
+[patch."https://github.com/zed-industries/xim-rs.git"]
+zed-xim = { path = "C:/Users/theos/scoop/persist/rustup/.cargo/git/checkouts/xim-rs-f2169dfc4c0688a9/16f35a2" }

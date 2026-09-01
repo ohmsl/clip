@@ -111,12 +111,12 @@ This project assumes you know how to install GStreamer correctly on your platfor
 
 Build:
 ```sh
-pnpm build
+cargo build --release --manifest-path apps/ui/Cargo.toml
 ```
 
 Run:
 ```sh
-pnpm dev
+cargo run --manifest-path apps/ui/Cargo.toml
 ```
 
 ---

@@ -1,0 +1,24 @@
+[package]
+name = "clip-ui"
+version = "0.1.0"
+description = "Native GPUI desktop interface for Clip"
+edition = "2024"
+
+[features]
+default = ["backend"]
+backend = ["dep:clip-service", "dep:global-hotkey", "dep:open", "dep:tokio"]
+
+[dependencies]
+anyhow = "1"
+chrono = { version = "0.4", features = ["clock"] }
+clip-service = { path = "../core", optional = true }
+crossbeam-channel = "0.5"
+global-hotkey = { version = "0.7", optional = true }
+gpui = { git = "https://github.com/zed-industries/zed", version = "0.2.2" }
+gpui-base = { git = "https://github.com/longbridge/gpui-component" }
+gpui-component = { git = "https://github.com/longbridge/gpui-component" }
+gpui-component-assets = { git = "https://github.com/longbridge/gpui-component" }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = ["font-kit"] }
+open = { version = "5", optional = true }
+smol = "2"
+tokio = { version = "1", features = ["rt"], optional = true }
